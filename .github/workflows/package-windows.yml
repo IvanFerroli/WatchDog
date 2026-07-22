@@ -21,6 +21,6 @@ jobs:
         with:
           name: AlwaysTrackWatchdog-windows
           path: |
-            dist/AlwaysTrackWatchdog.exe
+            dist/AlwaysTrackWatchdog/
             dist/installer/*.exe
           if-no-files-found: error

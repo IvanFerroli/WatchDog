@@ -15,4 +15,5 @@ if ($null -ne $Compiler) {
     Write-Warning "Inno Setup não encontrado; executável gerado, instalador pendente."
 }
 
-Get-FileHash dist/AlwaysTrackWatchdog.exe -Algorithm SHA256
+Get-FileHash dist/AlwaysTrackWatchdog/AlwaysTrackWatchdog.exe -Algorithm SHA256
+Get-ChildItem dist/installer/*.exe -ErrorAction SilentlyContinue | Get-FileHash -Algorithm SHA256

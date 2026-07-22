@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "Agente local que destaca menções diretas do Slack Desktop no Windows."
 readme = "README.md"
 requires-python = ">=3.12"
-license = { text = "Proprietary" }
+license = "LicenseRef-Proprietary"
 dependencies = [
   "pywinauto>=0.6.9; sys_platform == 'win32'",
   "winotify>=1.1.0; sys_platform == 'win32'",

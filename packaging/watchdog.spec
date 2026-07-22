@@ -1,14 +1,18 @@
 # -*- mode: python ; coding: utf-8 -*-
 
+import os
+
 from PyInstaller.utils.hooks import collect_submodules
+
+project_root = os.path.abspath(os.path.join(SPECPATH, os.pardir))
 
 hiddenimports = collect_submodules("pystray") + collect_submodules("winotify")
 
 a = Analysis(
-    ["src/watchdog/application/cli.py"],
-    pathex=["."],
+    [os.path.join(project_root, "packaging", "entrypoint.py")],
+    pathex=[project_root, os.path.join(project_root, "src")],
     binaries=[],
-    datas=[("config/default.json", "config")],
+    datas=[(os.path.join(project_root, "config", "default.json"), "config")],
     hiddenimports=hiddenimports,
     hookspath=[],
     hooksconfig={},
@@ -20,8 +24,6 @@ pyz = PYZ(a.pure)
 exe = EXE(
     pyz,
     a.scripts,
-    a.binaries,
-    a.datas,
     [],
     name="AlwaysTrackWatchdog",
     debug=False,
@@ -34,4 +36,14 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    exclude_binaries=True,
+)
+coll = COLLECT(
+    exe,
+    a.binaries,
+    a.datas,
+    strip=False,
+    upx=True,
+    upx_exclude=[],
+    name="AlwaysTrackWatchdog",
 )

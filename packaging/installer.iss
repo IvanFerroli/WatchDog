@@ -20,7 +20,7 @@ ArchitecturesInstallIn64BitMode=x64compatible
 UninstallDisplayIcon={app}\{#MyAppExeName}
 
 [Files]
-Source: "..\dist\AlwaysTrackWatchdog.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\dist\AlwaysTrackWatchdog\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
