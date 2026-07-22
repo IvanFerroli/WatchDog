@@ -2,6 +2,9 @@
 .venv/
 .tmp-venv-parse/
 .openclaw/
+.agents/
+.antigravity/
+.codex/
 __pycache__/
 *.py[cod]
 .pytest_cache/
