@@ -83,3 +83,11 @@ def test_retention_keeps_only_items_inside_category_policy(tmp_path) -> None:
             "direct-recent",
             "ignored-recent",
         }
+
+
+def test_history_can_be_hidden_without_disabling_dedup(tmp_path) -> None:
+    stored_event = event("private")
+    with SQLiteEventStore(tmp_path / "hidden.db", history_enabled=False) as store:
+        assert store.claim(stored_event)
+        assert store.get_event(stored_event.deduplication_key) is not None
+        assert store.list_events() == []

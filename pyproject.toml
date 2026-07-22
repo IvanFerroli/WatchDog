@@ -48,6 +48,7 @@ source = ["watchdog"]
 [tool.coverage.report]
 show_missing = true
 fail_under = 80
+precision = 2
 
 [tool.ruff]
 line-length = 100

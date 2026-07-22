@@ -41,6 +41,14 @@ class RecordingNotifier:
         self.events.append(event)
 
 
+class FailOnceNotifier(RecordingNotifier):
+    def notify(self, event: object) -> None:
+        if not self.events:
+            self.events.append("failed")
+            raise RuntimeError("synthetic notification failure")
+        self.events.append(event)
+
+
 def _runtime(
     adapter: FakeAdapter, store: SQLiteEventStore, notifier: RecordingNotifier
 ) -> MonitorRuntime:
@@ -102,4 +110,26 @@ def test_runtime_transitions_from_absent_to_monitoring_and_pause() -> None:
     assert recovered.state is HealthState.MONITORING
     assert paused.state is HealthState.PAUSED
     assert runtime.health.snapshot().state is HealthState.STARTING
+    store.close()
+
+
+def test_runtime_retries_reserved_but_unalerted_direct_event() -> None:
+    adapter = FakeAdapter(
+        [
+            ObservedEvent(
+                "slack",
+                datetime(2026, 7, 22, tzinfo=UTC),
+                external_key="retry-1",
+                raw_type="direta",
+            )
+        ]
+    )
+    notifier = FailOnceNotifier()
+    store = SQLiteEventStore(":memory:")
+    runtime = _runtime(adapter, store, notifier)
+
+    assert runtime.run_once().state is HealthState.DEGRADED
+    assert runtime.run_once().state is HealthState.MONITORING
+    assert len(notifier.events) == 2
+    assert store.is_alerted(runtime.deduplication.generate_key(adapter.events[0]))
     store.close()

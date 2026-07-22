@@ -31,6 +31,7 @@ class SQLiteEventStore:
         path: str | Path,
         *,
         preview_length: int = 240,
+        history_enabled: bool = True,
         metadata_allowlist: Iterable[str] = ("classification_reason",),
     ) -> None:
         if (
@@ -43,6 +44,7 @@ class SQLiteEventStore:
         if self.path != ":memory:":
             Path(self.path).expanduser().parent.mkdir(parents=True, exist_ok=True)
         self._preview_length = preview_length
+        self._history_enabled = history_enabled
         self._metadata_allowlist = frozenset(metadata_allowlist)
         self._lock = threading.RLock()
         self._connection = sqlite3.connect(
@@ -127,6 +129,8 @@ class SQLiteEventStore:
     def list_events(self, *, limit: int = 100) -> list[OperationalEvent]:
         if not isinstance(limit, int) or isinstance(limit, bool) or limit <= 0:
             raise ValueError("limit must be a positive integer")
+        if not self._history_enabled:
+            return []
         with self._lock:
             rows = self._connection.execute(
                 "SELECT * FROM events ORDER BY observed_at DESC, id DESC LIMIT ?", (limit,)
@@ -250,15 +254,16 @@ class SQLiteEventStore:
         metadata = {
             key: event.metadata[key] for key in self._metadata_allowlist if key in event.metadata
         }
+        preview = self._history_enabled
         return (
             event.id,
             event.source,
             event.external_key,
             event.category.value,
-            _preview(event.actor, self._preview_length),
-            _preview(event.location, self._preview_length),
-            _preview(event.body, self._preview_length),
-            _preview(event.title, self._preview_length),
+            _preview(event.actor, self._preview_length) if preview else None,
+            _preview(event.location, self._preview_length) if preview else None,
+            _preview(event.body, self._preview_length) if preview else None,
+            _preview(event.title, self._preview_length) if preview else None,
             _iso_optional(event.occurred_at),
             _iso(event.observed_at),
             now,

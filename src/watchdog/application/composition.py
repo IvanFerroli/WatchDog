@@ -37,6 +37,7 @@ def build_runtime(
     store = SQLiteEventStore(
         storage_path,
         preview_length=config.storage.content_preview_length,
+        history_enabled=config.notification.persist_history,
     )
     adapter = SlackUIAdapter(
         SlackWindowLifecycle(PywinautoWindowProvider(), config.slack.process_names),
@@ -47,6 +48,7 @@ def build_runtime(
             sound_enabled=config.notification.sound_enabled,
             sound_file=config.notification.sound_file,
             preview_length=config.storage.content_preview_length,
+            show_preview=config.notification.show_preview,
         )
         if config.notification.enabled
         else NullNotifier()
@@ -65,4 +67,11 @@ def build_runtime(
         clock=SystemClock(),
         poll_interval_seconds=config.watchdog.poll_interval_ms / 1000,
     )
+    store.apply_retention(
+        SystemClock().now(),
+        relevant_days=config.storage.relevant_retention_days,
+        ignored_days=config.storage.ignored_retention_days,
+    )
+    if not config.watchdog.enabled:
+        runtime.pause()
     return runtime, store

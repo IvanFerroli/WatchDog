@@ -26,6 +26,7 @@ class WindowsNotifier:
         sound_enabled: bool = True,
         sound_file: str | None = None,
         preview_length: int = 160,
+        show_preview: bool = True,
         toast_factory: Callable[..., Any] | None = None,
         sound_player: Callable[[str | None], None] | None = None,
     ) -> None:
@@ -34,12 +35,15 @@ class WindowsNotifier:
         self.sound_enabled = sound_enabled
         self.sound_file = sound_file
         self.preview_length = preview_length
+        self.show_preview = show_preview
         self._toast_factory = toast_factory
         self._sound_player = sound_player
 
     def notify(self, event: OperationalEvent) -> None:
         title = "Menção direta no Slack"
-        message = _message(event, self.preview_length)
+        message = (
+            _message(event, self.preview_length) if self.show_preview else "Nova menção direta"
+        )
         try:
             toast = self._factory()(app_id="AlwaysTrack Watchdog", title=title, msg=message)
             toast.show()

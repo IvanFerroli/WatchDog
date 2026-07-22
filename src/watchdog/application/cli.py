@@ -16,6 +16,7 @@ from watchdog.observability.logging import configure_logging
 
 from .composition import build_runtime
 from .configuration import JsonConfigRepository, default_data_directory
+from .single_instance import AlreadyRunningError, SingleInstanceLock
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -61,18 +62,27 @@ def main(argv: list[str] | None = None) -> int:
         body_automation_id=args.body_automation_id,
         external_key_automation_id=args.external_key_automation_id,
     )
-    runtime, store = build_runtime(config, data_directory=data_directory, selectors=selectors)
+    instance_lock = SingleInstanceLock(data_directory / "watchdog.lock")
     try:
-        if args.once:
-            snapshot = runtime.run_once()
-            print(_snapshot_json(snapshot))
-            return 2 if snapshot.state is HealthState.ERROR else 0
-        if args.headless or sys.platform != "win32":
-            return _run_headless(runtime)
-        return _run_desktop(runtime, store, repository, data_directory)
+        instance_lock.acquire()
+    except AlreadyRunningError as exc:
+        print(str(exc), file=sys.stderr)
+        return 3
+    try:
+        runtime, store = build_runtime(config, data_directory=data_directory, selectors=selectors)
+        try:
+            if args.once:
+                snapshot = runtime.run_once()
+                print(_snapshot_json(snapshot))
+                return 2 if snapshot.state is HealthState.ERROR else 0
+            if args.headless or sys.platform != "win32":
+                return _run_headless(runtime)
+            return _run_desktop(runtime, store, repository, data_directory)
+        finally:
+            runtime.stop()
+            store.close()
     finally:
-        runtime.stop()
-        store.close()
+        instance_lock.release()
 
 
 def _run_headless(runtime: object) -> int:
