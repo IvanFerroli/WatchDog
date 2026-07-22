@@ -1,4 +1,5 @@
 {
+  "schema_version": 1,
   "watchdog": {
     "enabled": true,
     "poll_interval_ms": 5000,
@@ -15,13 +16,13 @@
     "enabled": true,
     "sound_enabled": true,
     "sound_file": null,
-    "persist_history": true,
-    "show_preview": true
+    "persist_history": true
   },
   "storage": {
-    "path": null,
+    "path": "watchdog.db",
     "relevant_retention_days": 30,
-    "ignored_retention_days": 7
+    "ignored_retention_days": 7,
+    "content_preview_length": 240
   },
   "logging": {
     "level": "INFO"
