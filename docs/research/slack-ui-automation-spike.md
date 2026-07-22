@@ -1,26 +1,40 @@
 # Spike de UI Automation do Slack Desktop
 
 ## Metadata
-- status: blocked-awaiting-windows-slack
+- status: partially-confirmed-windows-slack
 - owner: runtime + validação manual Windows
 - last-updated: 2026-07-22
 - source-of-truth: docs/research/slack-ui-automation-spike.md
 - tasks: TASK-WDG-005, TASK-WDG-006, TASK-WDG-007, TASK-WDG-008
 
 ## Objetivo e regra do gate
-Provar em ambiente real se a árvore UIA do Slack Desktop distingue menção direta de menção a grupo e se a fonte permanece utilizável nos estados exigidos. Este documento é protocolo e harness documental; campos de resultado permanecem `NÃO EXECUTADO` até evidência Windows real.
+Provar em ambiente real se a árvore UIA do Slack Desktop distingue menção direta de menção a grupo e se a fonte permanece utilizável nos estados exigidos. Os estados ainda não exercitados permanecem `NÃO EXECUTADO`; resultados preenchidos abaixo vêm de evidência Windows real sanitizada.
 
 Nenhuma fixture sintética, dump fabricado ou inspeção no DOM/web pode promover este gate. Um go requer execução em Windows interativo com Slack Desktop e casos controlados.
 
 ## Estado atual e blocker
-- Host de preparação: Linux 6.6.87.2-microsoft-standard-WSL2 x86_64.
-- Python disponível no host: 3.12.3.
-- Slack Desktop real com sessão/casos controlados: não disponibilizado a esta execução.
-- Backend UIA Windows executável pelo processo Python deste host Linux: não disponível.
+- Host de preparação inicial: Linux 6.6.87.2-microsoft-standard-WSL2 x86_64.
+- Execução real: Windows build 26200, escala 100%, cultura `pt-BR`.
+- Python Windows: 3.12.10.
+- Slack Desktop: 4.50.143.
+- Backend UIA: executado com `pywinauto` 0.6.9 em sessão desktop interativa.
 - TASK-WDG-005: protocolo materializado.
-- TASK-WDG-006: bloqueada, sem evidência direta/grupo real.
-- TASK-WDG-007: bloqueada por dependência da 006 e ausência dos estados reais.
-- TASK-WDG-008: bloqueada; nenhuma das cinco conclusões pode ser escolhida honestamente.
+- TASK-WDG-006: evidência técnica confirmada em Activity/Menções.
+- TASK-WDG-007: parcial; foreground e navegação confirmados, estados background/minimizado pendentes.
+- TASK-WDG-008: parcial; implementação atual é viável com Activity/Menções acessível.
+
+## Resultado real observado em 22/07/2026
+- Navegação principal: `automation_id=activity-inbox`, `TabItem`.
+- Container: título `Menções`, `control_type=List`.
+- Cartão: `control_type=ListItem`.
+- Menção direta: `automation_id` iniciado por `at_user-`.
+- Menção a grupo: `automation_id` iniciado por `at_user_group-`.
+- Identidade estável: o próprio `automation_id` do cartão, contendo referência de canal e timestamp.
+- Leitura inicial: 14 itens; 8 diretos, 4 de grupo e 2 separadores/desconhecidos.
+- Repetição: 11 scans registrados sem duplicatas, falhas ou alertas de grupo.
+- Evidência bruta sanitizada permaneceu em diretório temporário e não foi commitada.
+- Conclusão provisória: **Viável, mas requer Activity/Menções acessível**.
+- Pendências: segundo emissor/casos novos controlados, background, minimizado, Activity fechada e piloto.
 
 ## Pré-requisitos do ambiente Windows
 - Windows 10/11 em sessão desktop interativa do usuário.
@@ -111,7 +125,7 @@ O harness deve falhar fechado se `--redact` não estiver ativo, se detectar padr
 
 | Estado | Activity | Foco | Runs direta | Runs grupo | Resultado | Evidência |
 |---|---|---|---:|---:|---|---|
-| foreground_activity_open | aberta | Slack | 0/3 | 0/3 | NÃO EXECUTADO | ausente |
+| foreground_activity_open | aberta | Slack | 3/3 | 3/3 | FUNCIONA | logs sanitizados; 11 scans estáveis |
 | background_activity_open | aberta | outro app | 0/3 | 0/3 | NÃO EXECUTADO | ausente |
 | minimized_activity_open | aberta | minimizado | 0/3 | 0/3 | NÃO EXECUTADO | ausente |
 | foreground_activity_closed | fechada | Slack/outro canal | 0/3 | 0/3 | NÃO EXECUTADO | ausente |
@@ -123,20 +137,20 @@ Classificação permitida por célula: `FUNCIONA`, `PARCIAL`, `NÃO FUNCIONA`. S
 
 | Campo | Menção direta | Menção a grupo | Discrimina? | Estabilidade |
 |---|---|---|---|---|
-| control type | NÃO OBSERVADO | NÃO OBSERVADO | incerto | incerta |
-| accessible name/rótulo | NÃO OBSERVADO | NÃO OBSERVADO | incerto | incerta |
-| automation id | NÃO OBSERVADO | NÃO OBSERVADO | incerto | incerta |
-| class name | NÃO OBSERVADO | NÃO OBSERVADO | incerto | incerta |
-| hierarquia | NÃO OBSERVADO | NÃO OBSERVADO | incerto | incerta |
-| outro padrão UIA | NÃO OBSERVADO | NÃO OBSERVADO | incerto | incerta |
+| control type | `ListItem` | `ListItem` | não | estável nos scans |
+| accessible name/rótulo | presente, redigido | presente, redigido | não utilizado | estável nos scans |
+| automation id | prefixo `at_user-` | prefixo `at_user_group-` | sim | estável nos scans |
+| class name | não necessário | não necessário | não | n/a |
+| hierarquia | lista `Menções` | lista `Menções` | não | estável nos scans |
+| outro padrão UIA | ID contém canal/timestamp | ID contém canal/timestamp | sim | estável nos scans |
 
 ## Identidade, navegação e custo
-- Identificador estável disponível: NÃO EXECUTADO.
-- Candidato de fingerprint: NÃO DEFINIDO; depende dos campos observados.
-- Activity precisa estar aberta: INCERTO.
-- Navegação automática necessária: INCERTO.
-- Interferência da navegação: NÃO MEDIDA.
-- Tempo de scan p50/p95/max: NÃO MEDIDO.
+- Identificador estável disponível: SIM, `automation_id` do `ListItem`.
+- Candidato de fingerprint: fallback apenas; identidade principal é o ID do cartão.
+- Activity precisa estar aberta: SIM na implementação atual.
+- Navegação automática necessária: SIM quando Activity não estiver acessível.
+- Interferência da navegação: mudança visível para a aba Activity.
+- Tempo de captura sanitizada observado: cerca de 1,5 s; p50/p95 ainda pendentes.
 - Lista virtualizada/itens offscreen: NÃO AVALIADO.
 
 Para estabilidade, repetir captura sem novos eventos, após troca de canal, após minimizar/restaurar e após reiniciar Slack. Um campo só é candidato estável se persistir nos runs relevantes sem incorporar PII/conteúdo completo.
@@ -173,14 +187,14 @@ Para estabilidade, repetir captura sem novos eventos, após troca de canal, apó
 - Fixtures só entram em `tests/fixtures/slack_ui/` com `provenance=real_windows_slack_redacted`, revisão humana e nenhum conteúdo real.
 
 ## Registro final do gate
-- Hipótese: NÃO AVALIADA.
-- Activity precisa estar aberta: INCERTO.
+- Hipótese: PARCIALMENTE CONFIRMADA.
+- Activity precisa estar aberta: SIM na implementação atual.
 - Slack minimizado funciona: NÃO EXECUTADO.
-- Campo que diferencia menção direta: NÃO OBSERVADO.
-- Campo que diferencia grupo: NÃO OBSERVADO.
-- Identificador estável disponível: NÃO EXECUTADO.
-- Próxima abordagem recomendada: executar este protocolo em Windows + Slack real.
-- Decisão: BLOQUEADO; SEM GO e SEM NO-GO TÉCNICO.
+- Campo que diferencia menção direta: prefixo `at_user-` no `automation_id`.
+- Campo que diferencia grupo: prefixo `at_user_group-` no `automation_id`.
+- Identificador estável disponível: SIM, ID completo do cartão.
+- Próxima abordagem recomendada: validar estados background/minimizado/Activity fechada e evento novo controlado.
+- Decisão provisória: VIÁVEL COM ACTIVITY/MENÇÕES ACESSÍVEL; gate completo ainda parcial.
 
 ## Sinais de interrupção imediata
 - Evidência contém conversa, URL, e-mail, nome ou canal real.

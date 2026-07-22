@@ -31,14 +31,29 @@ Os seletores devem vir do procedimento aprovado em
 [`docs/research/slack-ui-automation-spike.md`](docs/research/slack-ui-automation-spike.md).
 Sem eles, o Watchdog falha fechado com `STRATEGY_NOT_CONFIGURED`.
 
+Em Slack 4.50.143, interface `pt-BR`, o spike real confirmou a lista `Menções`,
+itens `ListItem`, menções diretas com prefixo `at_user-` e menções a grupo com
+prefixo `at_user_group-`. Para esse ambiente, use:
+
+```powershell
+./scripts/run_watchdog_windows.ps1 -Once
+./scripts/run_watchdog_windows.ps1
+```
+
+A versão atual requer a tela `Activity > Menções` acessível. O helper pode
+navegar até ela durante o diagnóstico com `--navigate-automation-id activity-inbox`.
+
 Uma leitura diagnóstica pode ser executada assim, substituindo apenas pelos
 valores realmente comprovados no spike:
 
 ```powershell
 watchdog --once `
-  --activity-automation-id "<VALIDADO>" `
-  --item-control-type "<VALIDADO>" `
-  --event-type-automation-id "<VALIDADO>"
+  --activity-title "Menções" `
+  --activity-control-type List `
+  --item-control-type ListItem `
+  --direct-item-automation-id-prefix "at_user-" `
+  --group-item-automation-id-prefix "at_user_group-" `
+  --item-name-as-body
 ```
 
 Depois do gate aprovado, execute sem `--once` para abrir tray/painel. O menu
