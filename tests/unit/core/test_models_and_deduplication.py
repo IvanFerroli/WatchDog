@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -61,3 +61,13 @@ def test_nearby_distinct_events_do_not_collide(tmp_path) -> None:
         service = DeduplicationService(store)
         assert service.claim(observed(external_key=None, body="primeiro"), classification).is_new
         assert service.claim(observed(external_key=None, body="segundo"), classification).is_new
+
+
+def test_scanner_bucket_boundary_does_not_duplicate_visible_item(tmp_path) -> None:
+    classification = Classification(EventCategory.DIRECT_MENTION, "rules-v1", "fixture.direct")
+    before_boundary = observed(external_key=None, observed_at=NOW + timedelta(seconds=59))
+    after_boundary = observed(external_key=None, observed_at=NOW + timedelta(seconds=61))
+    with SQLiteEventStore(tmp_path / "events.db") as store:
+        service = DeduplicationService(store)
+        assert service.claim(before_boundary, classification).is_new
+        assert not service.claim(after_boundary, classification).is_new

@@ -109,6 +109,14 @@ class SQLiteEventStore:
             if cursor.rowcount != 1:
                 raise KeyError(deduplication_key)
 
+    def is_alerted(self, deduplication_key: str) -> bool:
+        with self._lock:
+            row = self._connection.execute(
+                "SELECT alerted_at FROM events WHERE deduplication_key = ?",
+                (deduplication_key,),
+            ).fetchone()
+        return bool(row and row["alerted_at"])
+
     def get_event(self, deduplication_key: str) -> OperationalEvent | None:
         with self._lock:
             row = self._connection.execute(

@@ -37,7 +37,13 @@ class DeduplicationService:
         self._bucket_seconds = time_bucket_seconds
 
     def raw_fingerprint(self, observed: ObservedEvent) -> str:
-        identity_time = observed.occurred_at or observed.observed_at
+        # observed_at is the scanner timestamp and changes on every poll. Using it
+        # here would re-enable a still-visible card at each bucket boundary.
+        occurred_bucket = (
+            int(observed.occurred_at.timestamp()) // self._bucket_seconds
+            if observed.occurred_at is not None
+            else None
+        )
         payload = {
             "source": canonical_text(observed.source),
             "external_key": canonical_text(observed.external_key),
@@ -46,7 +52,7 @@ class DeduplicationService:
             "sender": canonical_text(observed.sender),
             "channel": canonical_text(observed.channel),
             "body": canonical_text(observed.body),
-            "time_bucket": int(identity_time.timestamp()) // self._bucket_seconds,
+            "occurred_bucket": occurred_bucket,
         }
         return f"fingerprint:{FINGERPRINT_VERSION}:{_digest(payload)}"
 
