@@ -7,8 +7,8 @@
 - source-of-truth: docs/operations/taskyfier-memory.md
 
 ## Status do projeto
-- classificação oficial de prontidão: backlog do MVP derivado; implementação ainda não iniciada
-- status adicional: gate documental e spike obrigatórios antes do núcleo
+- classificação oficial de prontidão: base do MVP implementada e validada portavelmente; release bloqueada
+- status adicional: gate UIA, matriz Windows/Slack, piloto e smoke do instalador permanecem obrigatórios
 - documento canônico vigente: doc/ALWAYSTRACK_WATCHDOG_MASTER_SPEC.md, versão 0.1
 - macro-objetivo atual: entregar MVP Windows instalável que alerta somente menção direta no Slack e passa a seção 18
 
@@ -45,14 +45,16 @@
 - TASK-WDG-001 a TASK-WDG-025, todos com status proposed
 
 ## Tasks concluídas
-- nenhuma
+- TASK-WDG-001, TASK-WDG-002 e TASK-WDG-005
+- TASK-WDG-003, 004, 009–13, 015–20 e 024 possuem implementação/evidência portátil, mas aguardam gates Windows quando aplicável
 
 ## Tasks em andamento
 - nenhuma
 
 ## Tasks bloqueadas
-- nenhuma oficialmente
-- TASK-WDG-009 a TASK-WDG-025 dependem estruturalmente do go em TASK-WDG-008
+- TASK-WDG-006–008 por ausência de Windows interativo + Slack real
+- TASK-WDG-014 aguarda identidade/occurred_at comprovado para eventos sem external_key
+- TASK-WDG-021–023 e 025 aguardam matriz, piloto e smoke Windows
 
 ## Dependências abertas
 - aceite do intake/baseline canônica
