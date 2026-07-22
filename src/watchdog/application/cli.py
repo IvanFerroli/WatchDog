@@ -31,6 +31,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--item-automation-id")
     parser.add_argument("--item-control-type")
     parser.add_argument("--event-type-automation-id")
+    parser.add_argument("--direct-item-automation-id-prefix")
+    parser.add_argument("--group-item-automation-id-prefix")
+    parser.add_argument("--item-name-as-body", action="store_true")
     parser.add_argument("--sender-automation-id")
     parser.add_argument("--channel-automation-id")
     parser.add_argument("--body-automation-id")
@@ -57,10 +60,13 @@ def main(argv: list[str] | None = None) -> int:
         item_automation_id=args.item_automation_id,
         item_control_type=args.item_control_type,
         event_type_automation_id=args.event_type_automation_id,
+        direct_item_automation_id_prefix=args.direct_item_automation_id_prefix,
+        group_item_automation_id_prefix=args.group_item_automation_id_prefix,
         sender_automation_id=args.sender_automation_id,
         channel_automation_id=args.channel_automation_id,
         body_automation_id=args.body_automation_id,
         external_key_automation_id=args.external_key_automation_id,
+        item_name_as_body=args.item_name_as_body,
     )
     instance_lock = SingleInstanceLock(data_directory / "watchdog.lock")
     try:

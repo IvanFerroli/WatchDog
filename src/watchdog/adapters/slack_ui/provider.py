@@ -26,8 +26,14 @@ class WindowProvider(Protocol):
 class PywinautoWindowProvider:
     """Discover a top-level Slack window; import pywinauto only on Windows."""
 
-    def __init__(self, application_factory: Callable[..., Any] | None = None) -> None:
+    def __init__(
+        self,
+        application_factory: Callable[..., Any] | None = None,
+        *,
+        desktop_factory: Callable[..., Any] | None = None,
+    ) -> None:
         self._application_factory = application_factory
+        self._desktop_factory = desktop_factory
 
     def _factory(self) -> Callable[..., Any]:
         if self._application_factory is not None:
@@ -51,6 +57,8 @@ class PywinautoWindowProvider:
     def find_window(self, process_names: tuple[str, ...]) -> SlackWindow:
         if not process_names:
             raise ValueError("process_names must not be empty")
+        if self._application_factory is None:
+            return self._find_desktop_window(process_names)
         factory = self._factory()
         had_access_error = False
         for process_name in process_names:
@@ -71,6 +79,46 @@ class PywinautoWindowProvider:
             else AdapterErrorCode.SLACK_NOT_RUNNING
         )
         raise SlackAdapterError(code, "Slack window was not found")
+
+    def _find_desktop_window(self, process_names: tuple[str, ...]) -> SlackWindow:
+        if sys.platform != "win32":
+            raise SlackAdapterError(
+                AdapterErrorCode.UNSUPPORTED_PLATFORM,
+                "Windows UI Automation is available only on Windows",
+                retriable=False,
+            )
+        try:
+            if self._desktop_factory is None:
+                from pywinauto import Desktop
+
+                desktop_factory = Desktop
+            else:
+                desktop_factory = self._desktop_factory
+
+            desktop = desktop_factory(backend="uia")
+            windows = desktop.windows(title_re="(?i).*slack.*", visible_only=False)
+            if not windows:
+                raise SlackAdapterError(
+                    AdapterErrorCode.SLACK_NOT_RUNNING,
+                    "Slack window was not found",
+                )
+            selected = max(
+                windows,
+                key=lambda window: (window.is_visible(), _window_area(window)),
+            )
+            native = desktop.window(handle=selected.handle)
+            return SlackWindow(
+                native,
+                process_names[0],
+                int(selected.element_info.process_id),
+            )
+        except SlackAdapterError:
+            raise
+        except Exception as exc:
+            raise SlackAdapterError(
+                AdapterErrorCode.SLACK_NOT_ACCESSIBLE,
+                "Slack window could not be enumerated",
+            ) from exc
 
     def is_alive(self, window: SlackWindow) -> bool:
         try:
@@ -106,3 +154,8 @@ def _safe_process_id(native: Any) -> int | None:
         return int(value)
     except Exception:
         return None
+
+
+def _window_area(window: Any) -> int:
+    rectangle = window.rectangle()
+    return max(0, rectangle.width()) * max(0, rectangle.height())

@@ -41,7 +41,11 @@ def build_runtime(
     )
     adapter = SlackUIAdapter(
         SlackWindowLifecycle(PywinautoWindowProvider(), config.slack.process_names),
-        PywinautoActivityReader(selectors),
+        PywinautoActivityReader(
+            selectors,
+            direct_label=config.slack.direct_mention_labels[0],
+            group_label=config.slack.group_mention_labels[0],
+        ),
     )
     notifier = (
         WindowsNotifier(

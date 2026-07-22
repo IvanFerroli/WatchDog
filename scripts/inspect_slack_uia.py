@@ -44,7 +44,7 @@ def _walk(controls: Iterable[Any], max_depth: int, depth: int = 0) -> list[dict[
     return result
 
 
-def inspect(output: Path, max_depth: int) -> int:
+def inspect(output: Path, max_depth: int, navigate_automation_id: str | None = None) -> int:
     if sys.platform != "win32":
         print("blocked: this spike requires Windows and Slack Desktop", file=sys.stderr)
         return 2
@@ -56,14 +56,43 @@ def inspect(output: Path, max_depth: int) -> int:
         print("blocked: no Slack window found", file=sys.stderr)
         return 3
 
+    candidates = [_window_metadata(window) for window in windows]
+    selected_index = max(
+        range(len(windows)),
+        key=lambda index: (
+            candidates[index]["visible"],
+            candidates[index]["area"],
+        ),
+    )
+    selected = windows[selected_index]
+    navigation_performed = False
+    if navigate_automation_id:
+        targets = [
+            control
+            for control in selected.descendants()
+            if str(control.element_info.automation_id or "") == navigate_automation_id
+        ]
+        if not targets:
+            print("blocked: requested navigation control was not found", file=sys.stderr)
+            return 4
+        target = targets[0]
+        if hasattr(target, "select"):
+            target.select()
+        else:
+            target.click_input()
+        time.sleep(1)
+        navigation_performed = True
     started = time.perf_counter()
-    controls = _walk(windows[0].children(), max_depth=max_depth)
+    controls = _walk(selected.children(), max_depth=max_depth)
     payload = {
         "schema_version": 1,
         "captured_at_epoch": int(time.time()),
         "platform": platform.platform(),
         "python": platform.python_version(),
         "window_count": len(windows),
+        "window_candidates": candidates,
+        "selected_window_index": selected_index,
+        "navigation_performed": navigation_performed,
         "elapsed_ms": round((time.perf_counter() - started) * 1000, 2),
         "controls": controls,
         "privacy": "accessible names replaced by length and sha256 prefix",
@@ -74,12 +103,32 @@ def inspect(output: Path, max_depth: int) -> int:
     return 0
 
 
+def _window_metadata(window: Any) -> dict[str, Any]:
+    rectangle = window.rectangle()
+    width = max(0, rectangle.width())
+    height = max(0, rectangle.height())
+    name = str(window.element_info.name or "")
+    return {
+        "process_id": window.element_info.process_id,
+        "control_type": str(window.element_info.control_type or ""),
+        "visible": bool(window.is_visible()),
+        "enabled": bool(window.is_enabled()),
+        "width": width,
+        "height": height,
+        "area": width * height,
+        "name_present": bool(name),
+        "name_length": len(name),
+        "name_fingerprint": _fingerprint(name) if name else None,
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--max-depth", type=int, default=8)
+    parser.add_argument("--navigate-automation-id")
     args = parser.parse_args()
-    return inspect(args.output, args.max_depth)
+    return inspect(args.output, args.max_depth, args.navigate_automation_id)
 
 
 if __name__ == "__main__":
