@@ -71,3 +71,20 @@ def test_scanner_bucket_boundary_does_not_duplicate_visible_item(tmp_path) -> No
         service = DeduplicationService(store)
         assert service.claim(before_boundary, classification).is_new
         assert not service.claim(after_boundary, classification).is_new
+
+
+def test_dedup_preserves_only_supported_routing_metadata(tmp_path) -> None:
+    classification = Classification(EventCategory.DIRECT_MENTION, "rules-v1", "fixture.direct")
+    routed = observed(
+        raw_metadata={
+            "slack_destination": "slack://channel?team=T123&id=C123",
+            "unsafe": "not propagated",
+        }
+    )
+    with SQLiteEventStore(tmp_path / "events.db") as store:
+        result = DeduplicationService(store).claim(routed, classification)
+        assert result.event.metadata["slack_destination"].startswith("slack://")
+        assert "unsafe" not in result.event.metadata
+        persisted = store.get_event(result.event.deduplication_key)
+        assert persisted is not None
+        assert persisted.metadata["slack_destination"].startswith("slack://")

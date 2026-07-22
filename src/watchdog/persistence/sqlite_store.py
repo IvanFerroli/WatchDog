@@ -32,7 +32,11 @@ class SQLiteEventStore:
         *,
         preview_length: int = 240,
         history_enabled: bool = True,
-        metadata_allowlist: Iterable[str] = ("classification_reason",),
+        metadata_allowlist: Iterable[str] = (
+            "classification_reason",
+            "slack_destination",
+            "slack_activity_destination",
+        ),
     ) -> None:
         if (
             not isinstance(preview_length, int)

@@ -38,6 +38,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--channel-automation-id")
     parser.add_argument("--body-automation-id")
     parser.add_argument("--external-key-automation-id")
+    parser.add_argument("--destination-automation-id")
     return parser
 
 
@@ -66,6 +67,7 @@ def main(argv: list[str] | None = None) -> int:
         channel_automation_id=args.channel_automation_id,
         body_automation_id=args.body_automation_id,
         external_key_automation_id=args.external_key_automation_id,
+        destination_automation_id=args.destination_automation_id,
         item_name_as_body=args.item_name_as_body,
     )
     instance_lock = SingleInstanceLock(data_directory / "watchdog.lock")

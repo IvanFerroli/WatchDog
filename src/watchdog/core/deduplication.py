@@ -13,6 +13,7 @@ from .normalizer import canonical_text, normalize_text
 
 DEDUPLICATION_VERSION = "v1"
 FINGERPRINT_VERSION = "v1"
+_ROUTING_METADATA_KEYS = ("slack_destination", "slack_activity_destination")
 
 
 class AtomicEventClaimer(Protocol):
@@ -71,6 +72,14 @@ class DeduplicationService:
     def build_event(
         self, observed: ObservedEvent, classification: Classification
     ) -> OperationalEvent:
+        metadata = {"classification_reason": classification.reason}
+        metadata.update(
+            {
+                key: value
+                for key in _ROUTING_METADATA_KEYS
+                if isinstance((value := observed.raw_metadata.get(key)), str) and value
+            }
+        )
         return OperationalEvent(
             id=str(uuid4()),
             source=observed.source,
@@ -87,7 +96,7 @@ class DeduplicationService:
             observed_at=observed.observed_at,
             deduplication_key=self.generate_key(observed),
             raw_fingerprint=self.raw_fingerprint(observed),
-            metadata={"classification_reason": classification.reason},
+            metadata=metadata,
             classifier_version=classification.classifier_version,
         )
 

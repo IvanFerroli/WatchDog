@@ -6,6 +6,7 @@ from pathlib import Path
 
 from watchdog.adapters.slack_ui import (
     ActivitySelectors,
+    PywinautoActivityNavigator,
     PywinautoActivityReader,
     PywinautoWindowProvider,
     SlackUIAdapter,
@@ -46,6 +47,7 @@ def build_runtime(
             direct_label=config.slack.direct_mention_labels[0],
             group_label=config.slack.group_mention_labels[0],
         ),
+        PywinautoActivityNavigator(automation_id="activity-inbox"),
     )
     notifier = (
         WindowsNotifier(

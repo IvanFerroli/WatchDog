@@ -7,6 +7,7 @@ import pytest
 from watchdog.adapters.slack_ui import (
     ActivitySelectors,
     AdapterErrorCode,
+    PywinautoActivityNavigator,
     PywinautoActivityReader,
     PywinautoWindowProvider,
     SlackAdapterError,
@@ -43,6 +44,31 @@ class FakeReader:
         return []
 
 
+class RecoveringReader:
+    adapter_version = "recovering-v1"
+
+    def __init__(self, *, fail_after_recovery: bool = False) -> None:
+        self.calls = 0
+        self.fail_after_recovery = fail_after_recovery
+
+    def read(self, window: SlackWindow) -> list[object]:
+        self.calls += 1
+        if self.calls == 1 or self.fail_after_recovery:
+            raise SlackAdapterError(
+                AdapterErrorCode.ACTIVITY_NOT_FOUND,
+                "Activity is not currently visible",
+            )
+        return ["restored"]
+
+
+class FakeNavigator:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def open_activity(self, window: SlackWindow) -> None:
+        self.calls += 1
+
+
 def test_window_lifecycle_reconnects_after_loss() -> None:
     provider = FakeProvider()
     lifecycle = SlackWindowLifecycle(provider, ("slack.exe",))
@@ -55,6 +81,116 @@ def test_window_lifecycle_reconnects_after_loss() -> None:
     provider.alive = False
     adapter.observe()
     assert provider.find_calls == 2
+
+
+def test_adapter_restores_activity_and_retries_read_once() -> None:
+    provider = FakeProvider()
+    reader = RecoveringReader()
+    navigator = FakeNavigator()
+    adapter = SlackUIAdapter(
+        SlackWindowLifecycle(provider, ("slack.exe",)),
+        reader,
+        navigator,
+    )
+
+    assert adapter.observe() == ["restored"]
+    assert reader.calls == 2
+    assert navigator.calls == 1
+
+
+def test_adapter_does_not_loop_when_activity_is_still_missing() -> None:
+    reader = RecoveringReader(fail_after_recovery=True)
+    navigator = FakeNavigator()
+    adapter = SlackUIAdapter(
+        SlackWindowLifecycle(FakeProvider(), ("slack.exe",)),
+        reader,
+        navigator,
+    )
+
+    with pytest.raises(SlackAdapterError) as error:
+        adapter.observe()
+
+    assert error.value.code is AdapterErrorCode.ACTIVITY_NOT_FOUND
+    assert reader.calls == 2
+    assert navigator.calls == 1
+
+
+def test_adapter_wraps_unexpected_navigation_failure_and_invalidates_window() -> None:
+    class BrokenNavigator:
+        def open_activity(self, window: SlackWindow) -> None:
+            raise RuntimeError("synthetic navigation failure")
+
+    provider = FakeProvider()
+    adapter = SlackUIAdapter(
+        SlackWindowLifecycle(provider, ("slack.exe",)),
+        RecoveringReader(),
+        BrokenNavigator(),
+    )
+
+    with pytest.raises(SlackAdapterError) as error:
+        adapter.observe()
+
+    assert error.value.code is AdapterErrorCode.READ_FAILED
+    provider.alive = True
+    adapter.observe()
+    assert provider.find_calls == 2
+
+
+class FakeNavigationTarget:
+    def __init__(self, *, exists: bool = True, select_error: Exception | None = None) -> None:
+        self.present = exists
+        self.select_error = select_error
+        self.selected = False
+
+    def exists(self, timeout: float = 0) -> bool:
+        return self.present
+
+    def wrapper_object(self) -> FakeNavigationTarget:
+        return self
+
+    def select(self) -> None:
+        if self.select_error:
+            raise self.select_error
+        self.selected = True
+
+
+class FakeNavigationRoot:
+    def __init__(self, target: FakeNavigationTarget) -> None:
+        self.target = target
+
+    def child_window(self, **criteria: str) -> FakeNavigationTarget:
+        assert criteria == {"auto_id": "activity-inbox", "control_type": "TabItem"}
+        return self.target
+
+
+def test_activity_navigator_selects_validated_activity_tab() -> None:
+    target = FakeNavigationTarget()
+    waits: list[float] = []
+    navigator = PywinautoActivityNavigator(
+        settle_seconds=0.25,
+        sleeper=waits.append,
+    )
+
+    navigator.open_activity(SlackWindow(FakeNavigationRoot(target), "slack.exe"))
+
+    assert target.selected
+    assert waits == [0.25]
+
+
+@pytest.mark.parametrize(
+    "target",
+    [
+        FakeNavigationTarget(exists=False),
+        FakeNavigationTarget(select_error=RuntimeError("UIA failure")),
+    ],
+)
+def test_activity_navigator_keeps_failures_structured(target: FakeNavigationTarget) -> None:
+    navigator = PywinautoActivityNavigator(settle_seconds=0)
+
+    with pytest.raises(SlackAdapterError) as error:
+        navigator.open_activity(SlackWindow(FakeNavigationRoot(target), "slack.exe"))
+
+    assert error.value.code is AdapterErrorCode.ACTIVITY_NOT_FOUND
 
 
 def test_pywinauto_provider_distinguishes_process_absence() -> None:
@@ -186,6 +322,7 @@ def test_activity_extracts_only_explicitly_mapped_fields() -> None:
         children={
             "type": FakeElement("Menção na conversa do canal"),
             "sender": FakeElement("Pessoa Teste"),
+            "destination": FakeElement("slack://channel?team=T123&id=C123"),
         }
     )
     container = FakeElement(children={"item": item})
@@ -196,6 +333,7 @@ def test_activity_extracts_only_explicitly_mapped_fields() -> None:
             item_control_type="ListItem",
             event_type_automation_id="type",
             sender_automation_id="sender",
+            destination_automation_id="destination",
         ),
         clock=lambda: datetime(2026, 7, 22, tzinfo=UTC),
     )
@@ -206,6 +344,7 @@ def test_activity_extracts_only_explicitly_mapped_fields() -> None:
     assert events[0].raw_type == "Menção na conversa do canal"
     assert events[0].sender == "Pessoa Teste"
     assert events[0].body is None
+    assert events[0].raw_metadata["slack_destination"] == ("slack://channel?team=T123&id=C123")
 
 
 @pytest.mark.parametrize(

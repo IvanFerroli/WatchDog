@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -7,7 +8,8 @@ import pytest
 from watchdog.application.configuration import JsonConfigRepository
 from watchdog.application.health import HealthMonitor
 from watchdog.core.config import ConfigError
-from watchdog.ui.panel import PanelViewModel
+from watchdog.core.models import EventCategory, EventPriority, OperationalEvent
+from watchdog.ui.panel import PanelViewModel, _compact_preview, _history_row
 from watchdog.ui.tray import TrayController
 
 
@@ -77,3 +79,37 @@ def test_panel_view_model_persists_valid_preferences(tmp_path: Path) -> None:
             sound_enabled=True,
             start_with_windows=False,
         )
+
+
+def test_panel_history_row_translates_category_and_removes_raw_slack_card_text() -> None:
+    event = OperationalEvent(
+        id="event-1",
+        source="slack.desktop.uia",
+        category=EventCategory.DIRECT_MENTION,
+        priority=EventPriority.HIGH,
+        observed_at=datetime(2026, 7, 22, 18, 30, tzinfo=UTC),
+        deduplication_key="dedupe-1",
+        classifier_version="test-v1",
+        body=(
+            "Solicitação de Reenvio"
+            "Menção na conversa do canal"
+            "solicitação-reenvio Quarta-feira conteúdo bruto"
+        ),
+    )
+
+    when, category, summary = _history_row(event)
+
+    assert when.startswith("22/07/2026 ")
+    assert category == "Menção direta"
+    assert summary == "Solicitação de Reenvio"
+
+
+def test_panel_compacts_whitespace_and_long_previews() -> None:
+    preview = _compact_preview("  uma   mensagem\ncom detalhes adicionais  ", limit=24)
+
+    assert preview == "uma mensagem com detalh…"
+    assert len(preview) == 24
+
+
+def test_panel_omits_card_text_when_it_only_contains_slack_metadata() -> None:
+    assert _compact_preview("Menção ao canal projeto interno dados brutos") == ""

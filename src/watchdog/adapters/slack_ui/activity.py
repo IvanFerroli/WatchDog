@@ -29,6 +29,7 @@ class ActivitySelectors:
     channel_automation_id: str | None = None
     body_automation_id: str | None = None
     external_key_automation_id: str | None = None
+    destination_automation_id: str | None = None
     item_name_as_body: bool = False
     max_items: int = 50
 
@@ -134,6 +135,7 @@ class PywinautoActivityReader:
             "sender": _child_text(item, self.selectors.sender_automation_id),
             "channel": _child_text(item, self.selectors.channel_automation_id),
             "body": body,
+            "slack_destination": _child_text(item, self.selectors.destination_automation_id),
         }
         return ObservedEvent(
             source="slack.desktop.uia",
@@ -146,6 +148,11 @@ class PywinautoActivityReader:
             raw_metadata={
                 "adapter_version": self.adapter_version,
                 "available_fields": tuple(key for key, value in fields.items() if value),
+                **(
+                    {"slack_destination": fields["slack_destination"]}
+                    if fields["slack_destination"]
+                    else {}
+                ),
             },
         )
 

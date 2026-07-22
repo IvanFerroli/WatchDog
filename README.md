@@ -60,6 +60,13 @@ Depois do gate aprovado, execute sem `--once` para abrir tray/painel. O menu
 permite abrir o painel, pausar/retomar e encerrar. Fechar o painel não encerra o
 monitor.
 
+As notificações aparecem como popups nativos de duração longa, com som, corpo
+clicável e botão **Abrir no Slack**. No perfil validado atual, o clique abre ou
+foca o cliente por `slack://open`; se um seletor de destino for comprovado e
+configurado, a mesma infraestrutura aceita abrir a conversa/mensagem. A
+recuperação UIA mantém Atividade/Menções acessível durante o monitoramento.
+Somente URIs `slack://` e URLs HTTPS sob `slack.com` são aceitas.
+
 ## Qualidade
 
 ```powershell
