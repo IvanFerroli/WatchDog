@@ -366,4 +366,8 @@ def _row_to_event(row: sqlite3.Row) -> OperationalEvent:
         metadata=json.loads(row["metadata_json"]),
         classifier_version=row["classifier_version"],
         schema_version=row["event_schema_version"],
+        status=EventStatus(row["status"]),
+        first_seen_at=datetime.fromisoformat(row["first_seen_at"]),
+        last_seen_at=datetime.fromisoformat(row["last_seen_at"]),
+        alerted_at=_datetime_optional(row["alerted_at"]),
     )

@@ -99,6 +99,10 @@ class OperationalEvent:
     raw_fingerprint: str | None = None
     metadata: Mapping[str, Any] = field(default_factory=dict)
     schema_version: int = SCHEMA_VERSION
+    status: EventStatus | None = None
+    first_seen_at: datetime | None = None
+    last_seen_at: datetime | None = None
+    alerted_at: datetime | None = None
 
     def __post_init__(self) -> None:
         for name in ("id", "source", "deduplication_key", "classifier_version"):
@@ -118,6 +122,12 @@ class OperationalEvent:
         object.__setattr__(self, "observed_at", _utc_datetime(self.observed_at, "observed_at"))
         if self.occurred_at is not None:
             object.__setattr__(self, "occurred_at", _utc_datetime(self.occurred_at, "occurred_at"))
+        for name in ("first_seen_at", "last_seen_at", "alerted_at"):
+            value = getattr(self, name)
+            if value is not None:
+                object.__setattr__(self, name, _utc_datetime(value, name))
+        if isinstance(self.status, str):
+            object.__setattr__(self, "status", EventStatus(self.status))
         object.__setattr__(self, "metadata", dict(self.metadata))
 
 

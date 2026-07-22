@@ -4,6 +4,7 @@ from datetime import UTC, datetime, timedelta
 from watchdog.core.models import (
     EventCategory,
     EventPriority,
+    EventStatus,
     OperationalEvent,
     OperationalState,
 )
@@ -42,6 +43,10 @@ def test_migration_crud_state_config_and_preview_policy(tmp_path) -> None:
         assert stored is not None
         assert stored.body == "texto corpor"
         assert stored.metadata == {}
+        assert stored.status is EventStatus.PROCESSED
+        assert stored.first_seen_at == NOW
+        assert stored.last_seen_at == NOW
+        assert stored.alerted_at is None
         state = OperationalState(
             last_successful_scan_at=NOW, slack_version="1", adapter_version="2"
         )
