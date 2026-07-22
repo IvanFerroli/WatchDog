@@ -16,10 +16,11 @@
     "enabled": true,
     "sound_enabled": true,
     "sound_file": null,
-    "persist_history": true
+    "persist_history": true,
+    "show_preview": true
   },
   "storage": {
-    "path": "watchdog.db",
+    "path": null,
     "relevant_retention_days": 30,
     "ignored_retention_days": 7,
     "content_preview_length": 240

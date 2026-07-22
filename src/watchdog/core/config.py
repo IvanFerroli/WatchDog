@@ -77,11 +77,12 @@ class NotificationConfig:
     sound_enabled: bool = True
     sound_file: str | None = None
     persist_history: bool = True
+    show_preview: bool = True
 
 
 @dataclass(frozen=True, slots=True)
 class StorageConfig:
-    path: str = "watchdog.db"
+    path: str | None = None
     relevant_retention_days: int = 30
     ignored_retention_days: int = 7
     content_preview_length: int = 240
@@ -189,7 +190,9 @@ class AppConfig:
 
         nt = _section(data, "notification")
         _reject_unknown(
-            nt, {"enabled", "sound_enabled", "sound_file", "persist_history"}, "notification"
+            nt,
+            {"enabled", "sound_enabled", "sound_file", "persist_history", "show_preview"},
+            "notification",
         )
         sound_file = nt.get("sound_file", defaults.notification.sound_file)
         if sound_file is not None:
@@ -205,6 +208,10 @@ class AppConfig:
                 nt.get("persist_history", defaults.notification.persist_history),
                 "notification.persist_history",
             ),
+            show_preview=_bool(
+                nt.get("show_preview", defaults.notification.show_preview),
+                "notification.show_preview",
+            ),
         )
 
         st = _section(data, "storage")
@@ -213,8 +220,11 @@ class AppConfig:
             {"path", "relevant_retention_days", "ignored_retention_days", "content_preview_length"},
             "storage",
         )
+        storage_path = st.get("path", defaults.storage.path)
+        if storage_path is not None:
+            storage_path = _string(storage_path, "storage.path")
         storage = StorageConfig(
-            path=_string(st.get("path", defaults.storage.path), "storage.path"),
+            path=storage_path,
             relevant_retention_days=_positive_int(
                 st.get("relevant_retention_days", defaults.storage.relevant_retention_days),
                 "storage.relevant_retention_days",
