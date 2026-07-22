@@ -1,0 +1,34 @@
+# Ambientes e caches locais
+.venv/
+.tmp-venv-parse/
+.openclaw/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Build e artefatos locais
+build/
+dist/
+*.egg-info/
+artifacts/
+
+# Dados locais e diagnósticos potencialmente sensíveis
+*.db
+*.db-shm
+*.db-wal
+logs/
+diagnostics/
+*.uia.xml
+*.uia.json
+
+# Arquivos Markdown
+AGENTS.md
+HEARTBEAT.md
+IDENTITY.md
+RELATORIO-PROJETO-2026-04-27.md
+SOUL.md
+TOOLS.md
+USER.md

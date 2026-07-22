@@ -1,0 +1,26 @@
+name: package-windows
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+jobs:
+  package:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: choco install innosetup --yes --no-progress
+      - shell: pwsh
+        run: ./scripts/build_windows.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AlwaysTrackWatchdog-windows
+          path: |
+            dist/AlwaysTrackWatchdog.exe
+            dist/installer/*.exe
+          if-no-files-found: error

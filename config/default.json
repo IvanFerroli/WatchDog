@@ -1,0 +1,29 @@
+{
+  "watchdog": {
+    "enabled": true,
+    "poll_interval_ms": 5000,
+    "start_with_windows": false
+  },
+  "slack": {
+    "process_names": ["slack.exe"],
+    "language": "pt-BR",
+    "direct_mention_labels": ["Menção na conversa do canal"],
+    "group_mention_labels": ["Menção ao grupo na conversa do canal"],
+    "user_display_names": []
+  },
+  "notification": {
+    "enabled": true,
+    "sound_enabled": true,
+    "sound_file": null,
+    "persist_history": true,
+    "show_preview": true
+  },
+  "storage": {
+    "path": null,
+    "relevant_retention_days": 30,
+    "ignored_retention_days": 7
+  },
+  "logging": {
+    "level": "INFO"
+  }
+}
