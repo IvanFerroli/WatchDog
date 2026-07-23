@@ -19,7 +19,7 @@ from watchdog.core.deduplication import DeduplicationService
 from watchdog.core.normalizer import EventNormalizer
 from watchdog.notifications import PreferenceAwareNotifier, WindowsNotifier
 from watchdog.persistence import SQLiteEventStore
-from watchdog.ui.resources import application_icon_path
+from watchdog.ui.resources import staged_application_icon_path
 
 from .runtime import MonitorRuntime, SystemClock
 
@@ -60,7 +60,7 @@ def build_runtime(
         sound_file=config.notification.sound_file,
         preview_length=config.storage.content_preview_length,
         show_preview=config.notification.show_preview,
-        icon_path=application_icon_path(),
+        icon_path=staged_application_icon_path(data_directory),
     )
     notifier = PreferenceAwareNotifier(
         windows_notifier,

@@ -9,7 +9,7 @@ from typing import Any
 from watchdog.application.configuration import JsonConfigRepository
 
 from .panel import PanelViewModel, TkPanel
-from .resources import application_icon_path
+from .resources import staged_application_icon_path
 from .tray import PystrayTray, TrayController
 
 
@@ -23,7 +23,7 @@ class DesktopApplication:
         logs_directory: Path,
     ) -> None:
         self.runtime = runtime
-        icon_path = application_icon_path()
+        icon_path = staged_application_icon_path(logs_directory.parent)
         self.panel = TkPanel(
             PanelViewModel(
                 health=runtime.health,
