@@ -93,6 +93,18 @@ class PanelViewModel:
 
     def snapshot(self, *, history_limit: int = 50) -> PanelSnapshot:
         health = self.health.snapshot()
+        preferences = self.config_repository.load_notification_preferences()
+        enabled_categories: set[EventCategory] = set()
+        if preferences.enabled:
+            if preferences.direct_mentions_enabled:
+                enabled_categories.add(EventCategory.DIRECT_MENTION)
+            if preferences.direct_messages_enabled:
+                enabled_categories.add(EventCategory.DIRECT_MESSAGE)
+        history = tuple(
+            event
+            for event in self.store.list_events(limit=history_limit)
+            if event.category in enabled_categories
+        )
         slack_status = {
             "SLACK_NOT_RUNNING": "Não detectado",
             "SLACK_NOT_ACCESSIBLE": "Inacessível",
@@ -105,7 +117,7 @@ class PanelViewModel:
             new_items_last_scan=health.new_items_last_scan,
             direct_mentions_today=health.direct_mentions_today,
             last_error_code=health.last_error_code,
-            history=tuple(self.store.list_events(limit=history_limit)),
+            history=history,
             logs_directory=self.logs_directory,
         )
 
@@ -288,6 +300,7 @@ class TkPanel:
             self._preference_status.set("Não foi possível salvar")
         else:
             self._preference_status.set("Preferências salvas")
+            self._refresh_history()
 
     def refresh(self) -> None:
         snapshot = self._view_model.snapshot()
@@ -305,14 +318,20 @@ class TkPanel:
         )
         prefix = "Último erro recuperado" if snapshot.status == "MONITORING" else "Último erro"
         self._error.set(f"{prefix}: {error}")
-        history_rows = tuple(_history_row(event) for event in snapshot.history)
+        self._render_history(snapshot.history)
+        self._root.after(1_000, self.refresh)
+
+    def _refresh_history(self) -> None:
+        self._render_history(self._view_model.snapshot().history)
+
+    def _render_history(self, history: tuple[OperationalEvent, ...]) -> None:
+        history_rows = tuple(_history_row(event) for event in history)
         if history_rows != self._history_rows:
             for item_id in self._history.get_children():
                 self._history.delete(item_id)
             for row in history_rows:
                 self._history.insert("", self._tk.END, values=row)
             self._history_rows = history_rows
-        self._root.after(1_000, self.refresh)
 
 
 def _history_row(event: OperationalEvent) -> tuple[str, str, str]:

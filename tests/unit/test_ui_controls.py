@@ -14,8 +14,11 @@ from watchdog.ui.tray import TrayController
 
 
 class FakeStore:
-    def list_events(self, *, limit: int = 100) -> list[object]:
-        return []
+    def __init__(self, events: list[OperationalEvent] | None = None) -> None:
+        self.events = events or []
+
+    def list_events(self, *, limit: int = 100) -> list[OperationalEvent]:
+        return self.events[:limit]
 
 
 class FakeRuntime:
@@ -98,6 +101,35 @@ def test_panel_view_model_persists_valid_preferences(tmp_path: Path) -> None:
         )
 
 
+def test_panel_history_follows_enabled_popup_categories_immediately(tmp_path: Path) -> None:
+    events = [
+        _event("mention", EventCategory.DIRECT_MENTION),
+        _event("dm", EventCategory.DIRECT_MESSAGE),
+        _event("group", EventCategory.GROUP_MENTION),
+        _event("unknown", EventCategory.UNKNOWN),
+    ]
+    view_model = PanelViewModel(
+        health=HealthMonitor(),
+        store=FakeStore(events),
+        config_repository=JsonConfigRepository(tmp_path / "config.json"),
+        logs_directory=tmp_path / "logs",
+    )
+
+    assert [event.id for event in view_model.snapshot().history] == ["mention", "dm"]
+
+    view_model.save_alert_preferences(
+        direct_mentions_enabled=False,
+        direct_messages_enabled=True,
+    )
+    assert [event.id for event in view_model.snapshot().history] == ["dm"]
+
+    view_model.save_alert_preferences(
+        direct_mentions_enabled=False,
+        direct_messages_enabled=False,
+    )
+    assert view_model.snapshot().history == ()
+
+
 def test_panel_history_row_translates_category_and_removes_raw_slack_card_text() -> None:
     event = OperationalEvent(
         id="event-1",
@@ -130,3 +162,15 @@ def test_panel_compacts_whitespace_and_long_previews() -> None:
 
 def test_panel_omits_card_text_when_it_only_contains_slack_metadata() -> None:
     assert _compact_preview("Menção ao canal projeto interno dados brutos") == ""
+
+
+def _event(event_id: str, category: EventCategory) -> OperationalEvent:
+    return OperationalEvent(
+        id=event_id,
+        source="slack",
+        category=category,
+        priority=EventPriority.HIGH,
+        observed_at=datetime(2026, 7, 22, 18, 30, tzinfo=UTC),
+        deduplication_key=f"dedupe-{event_id}",
+        classifier_version="test-v1",
+    )
