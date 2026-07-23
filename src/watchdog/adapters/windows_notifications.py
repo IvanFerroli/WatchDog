@@ -15,6 +15,8 @@ from typing import Any, Protocol
 
 from watchdog.core.models import ObservedEvent
 
+_TOAST_GENERIC_BINDING = "ToastGeneric"
+
 
 class WindowsNotificationErrorCode(StrEnum):
     UNSUPPORTED_PLATFORM = "WINDOWS_NOTIFICATIONS_UNSUPPORTED"
@@ -177,10 +179,7 @@ class WinRTUserNotificationBackend:
 
     async def _list_toasts(self) -> list[WindowsNotificationRecord]:
         try:
-            from winrt.windows.ui.notifications import (
-                KnownNotificationBindings,
-                NotificationKinds,
-            )
+            from winrt.windows.ui.notifications import NotificationKinds
             from winrt.windows.ui.notifications.management import UserNotificationListener
         except ImportError as exc:
             raise WindowsNotificationError(
@@ -202,7 +201,7 @@ class WinRTUserNotificationBackend:
         for item in notifications:
             record = _record_from_winrt(
                 item,
-                KnownNotificationBindings.TOAST_GENERIC,
+                _TOAST_GENERIC_BINDING,
                 self._app_filter,
             )
             if record is not None:
