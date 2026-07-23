@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import threading
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from watchdog.adapters.slack_ui.event_opener import SlackOpenResult
 from watchdog.application.configuration import JsonConfigRepository
+from watchdog.core.models import OperationalEvent
 
 from .panel import PanelViewModel, TkPanel
 from .resources import staged_application_icon_path
@@ -21,6 +24,7 @@ class DesktopApplication:
         store: Any,
         config_repository: JsonConfigRepository,
         logs_directory: Path,
+        event_opener: Callable[[OperationalEvent], SlackOpenResult] | None = None,
     ) -> None:
         self.runtime = runtime
         icon_path = staged_application_icon_path(logs_directory.parent)
@@ -32,6 +36,7 @@ class DesktopApplication:
                 logs_directory=logs_directory,
             ),
             icon_path=icon_path,
+            event_opener=event_opener,
         )
         self.tray = PystrayTray(
             TrayController(runtime, open_panel=self.panel.show, shutdown=self._shutdown),

@@ -5,11 +5,18 @@ from pathlib import Path
 
 import pytest
 
+from watchdog.adapters.slack_ui import SlackOpenResult
 from watchdog.application.configuration import JsonConfigRepository
 from watchdog.application.health import HealthMonitor
 from watchdog.core.config import ConfigError
 from watchdog.core.models import EventCategory, EventPriority, OperationalEvent
-from watchdog.ui.panel import PanelViewModel, _compact_preview, _history_row
+from watchdog.ui.panel import (
+    PanelViewModel,
+    TkPanel,
+    _compact_preview,
+    _filter_history,
+    _history_row,
+)
 from watchdog.ui.tray import TrayController
 
 
@@ -35,6 +42,57 @@ class FakeRuntime:
 
     def stop(self) -> None:
         self.stopped = True
+
+
+class FakeHistorySelection:
+    def __init__(self, item_id: str | None) -> None:
+        self.item_id = item_id
+
+    def selection(self) -> tuple[str, ...]:
+        return (self.item_id,) if self.item_id else ()
+
+
+class FakeStringVar:
+    def __init__(self, value: str = "") -> None:
+        self.value = value
+
+    def set(self, value: str) -> None:
+        self.value = value
+
+    def get(self) -> str:
+        return self.value
+
+
+class FakeHistoryTree:
+    def __init__(self) -> None:
+        self.items: dict[str, tuple[str, str, str]] = {}
+        self.selected: tuple[str, ...] = ()
+        self.focused: str | None = None
+
+    def get_children(self) -> tuple[str, ...]:
+        return tuple(self.items)
+
+    def delete(self, item_id: str) -> None:
+        del self.items[item_id]
+
+    def insert(
+        self,
+        _parent: str,
+        _index: str,
+        *,
+        iid: str,
+        values: tuple[str, str, str],
+    ) -> None:
+        self.items[iid] = values
+
+    def selection(self) -> tuple[str, ...]:
+        return self.selected
+
+    def selection_set(self, item_id: str) -> None:
+        self.selected = (item_id,)
+
+    def focus(self, item_id: str) -> None:
+        self.focused = item_id
 
 
 def test_tray_commands_control_runtime() -> None:
@@ -164,7 +222,158 @@ def test_panel_omits_card_text_when_it_only_contains_slack_metadata() -> None:
     assert _compact_preview("Menção ao canal projeto interno dados brutos") == ""
 
 
-def _event(event_id: str, category: EventCategory) -> OperationalEvent:
+@pytest.mark.parametrize(
+    ("query", "expected_id"),
+    [
+        ("jose", "mention"),
+        ("operaÇAO", "mention"),
+        ("solicitacao urgente", "mention"),
+        ("mensagem privada", "dm"),
+    ],
+)
+def test_panel_history_search_is_instant_normalized_and_accent_insensitive(
+    query: str,
+    expected_id: str,
+) -> None:
+    history = (
+        _event(
+            "mention",
+            EventCategory.DIRECT_MENTION,
+            actor="José",
+            location="Operação",
+            title="Solicitação",
+            body="urgente",
+        ),
+        _event(
+            "dm",
+            EventCategory.DIRECT_MESSAGE,
+            actor="Ana",
+            body="Mensagem   privada",
+        ),
+    )
+
+    visible = _filter_history(history, query=query, event_type="Todos")
+
+    assert [event.id for event in visible] == [expected_id]
+
+
+def test_panel_history_type_filter_is_fail_closed_to_enabled_event_types() -> None:
+    history = (
+        _event("mention", EventCategory.DIRECT_MENTION),
+        _event("dm", EventCategory.DIRECT_MESSAGE),
+        _event("group", EventCategory.GROUP_MENTION),
+    )
+
+    mentions = _filter_history(history, query="", event_type="Menções")
+    dms = _filter_history(history, query="", event_type="DMs")
+
+    assert [event.id for event in mentions] == ["mention"]
+    assert [event.id for event in dms] == ["dm"]
+
+
+def test_panel_opens_selected_event_only_from_explicit_user_action() -> None:
+    event = _event("mention", EventCategory.DIRECT_MENTION)
+    opened: list[OperationalEvent] = []
+    panel = object.__new__(TkPanel)
+    panel._history = FakeHistorySelection("row-1")
+    panel._history_events = {"row-1": event}
+    panel._event_opener = lambda selected: opened.append(selected) or SlackOpenResult.EXACT_EVENT
+    panel._history_action_status = FakeStringVar()
+
+    assert opened == []
+    panel._open_selected_history_event()
+
+    assert opened == [event]
+    assert panel._history_action_status.value == "Atividade exata aberta no Slack"
+
+
+def test_panel_signals_when_only_the_generic_slack_fallback_was_opened() -> None:
+    panel = object.__new__(TkPanel)
+    panel._history = FakeHistorySelection("row-1")
+    panel._history_events = {"row-1": _event("dm", EventCategory.DIRECT_MESSAGE)}
+    panel._event_opener = lambda _event: SlackOpenResult.GENERIC
+    panel._history_action_status = FakeStringVar()
+
+    panel._open_selected_history_event()
+
+    assert panel._history_action_status.value == "Slack aberto; conversa não localizada"
+
+
+def test_panel_ignores_open_action_without_a_selected_event() -> None:
+    opened: list[str] = []
+    panel = object.__new__(TkPanel)
+    panel._history = FakeHistorySelection(None)
+    panel._history_events = {}
+    panel._event_opener = opened.append
+    panel._history_action_status = FakeStringVar()
+
+    panel._open_selected_history_event()
+
+    assert opened == []
+
+
+def test_panel_reports_event_open_failure_without_crashing() -> None:
+    panel = object.__new__(TkPanel)
+    panel._history = FakeHistorySelection("row-1")
+    panel._history_events = {"row-1": _event("mention", EventCategory.DIRECT_MENTION)}
+    panel._event_opener = lambda _event: (_ for _ in ()).throw(OSError("synthetic"))
+    panel._history_action_status = FakeStringVar()
+
+    panel._open_selected_history_event()
+
+    assert panel._history_action_status.value == "Não foi possível abrir o Slack"
+
+
+def test_panel_refresh_preserves_selection_and_row_to_event_mapping() -> None:
+    mention = _event(
+        "mention",
+        EventCategory.DIRECT_MENTION,
+        body="primeira versão",
+    )
+    dm = _event("dm", EventCategory.DIRECT_MESSAGE)
+    panel = object.__new__(TkPanel)
+    panel._history = FakeHistoryTree()
+    panel._history_rows = ()
+    panel._history_events = {}
+    panel._all_history = ()
+    panel._history_query = FakeStringVar()
+    panel._history_type = FakeStringVar("Todos")
+    panel._history_count = FakeStringVar()
+    panel._history_empty = FakeStringVar()
+    panel._tk = type("FakeTk", (), {"END": "end"})()
+
+    panel._render_history((mention, dm))
+    panel._history.selection_set("mention")
+    updated_mention = _event(
+        "mention",
+        EventCategory.DIRECT_MENTION,
+        body="versão atualizada",
+    )
+
+    panel._render_history((updated_mention, dm))
+
+    assert panel._history.selection() == ("mention",)
+    assert panel._history.focused == "mention"
+    assert panel._history_events["mention"] is updated_mention
+    assert panel._history_count.value == "2 atividades"
+
+    panel._history_query.set("sem correspondência")
+    panel._render_history((updated_mention, dm))
+
+    assert panel._history.items == {}
+    assert panel._history_count.value == "0 de 2 atividades"
+    assert panel._history_empty.value == ("Nenhum resultado para a busca e o filtro atuais")
+
+
+def _event(
+    event_id: str,
+    category: EventCategory,
+    *,
+    actor: str | None = None,
+    location: str | None = None,
+    title: str | None = None,
+    body: str | None = None,
+) -> OperationalEvent:
     return OperationalEvent(
         id=event_id,
         source="slack",
@@ -173,4 +382,8 @@ def _event(event_id: str, category: EventCategory) -> OperationalEvent:
         observed_at=datetime(2026, 7, 22, 18, 30, tzinfo=UTC),
         deduplication_key=f"dedupe-{event_id}",
         classifier_version="test-v1",
+        actor=actor,
+        location=location,
+        title=title,
+        body=body,
     )

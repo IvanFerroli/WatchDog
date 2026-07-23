@@ -94,7 +94,13 @@ def main(argv: list[str] | None = None) -> int:
                 return 2 if snapshot.state is HealthState.ERROR else 0
             if args.headless or sys.platform != "win32":
                 return _run_headless(runtime)
-            return _run_desktop(runtime, store, repository, data_directory)
+            return _run_desktop(
+                runtime,
+                store,
+                repository,
+                data_directory,
+                process_names=config.slack.process_names,
+            )
         finally:
             runtime.stop()
             store.close()
@@ -116,14 +122,35 @@ def _run_headless(runtime: object) -> int:
     return 0
 
 
-def _run_desktop(runtime: object, store: object, repository: object, data_directory: Path) -> int:
+def _run_desktop(
+    runtime: object,
+    store: object,
+    repository: object,
+    data_directory: Path,
+    *,
+    process_names: tuple[str, ...],
+) -> int:
+    from watchdog.adapters.slack_ui import (
+        PywinautoActivityNavigator,
+        PywinautoSlackEventOpener,
+        PywinautoWindowProvider,
+    )
     from watchdog.ui.desktop import DesktopApplication
 
+    event_opener = PywinautoSlackEventOpener(
+        PywinautoWindowProvider(),
+        process_names,
+        activity_navigator=PywinautoActivityNavigator(
+            secondary_title="Menções",
+            secondary_control_type="TabItem",
+        ),
+    )
     app = DesktopApplication(
         runtime=runtime,
         store=store,
         config_repository=repository,
         logs_directory=data_directory / "logs",
+        event_opener=event_opener.open,
     )
     app.run()
     return 0
