@@ -47,7 +47,12 @@ def build_runtime(
             direct_label=config.slack.direct_mention_labels[0],
             group_label=config.slack.group_mention_labels[0],
         ),
-        PywinautoActivityNavigator(automation_id="activity-inbox"),
+        PywinautoActivityNavigator(
+            automation_id="activity-inbox",
+            secondary_title="Menções",
+            secondary_control_type="TabItem",
+            shortcut="^+m",
+        ),
     )
     notifier = (
         WindowsNotifier(

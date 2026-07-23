@@ -80,24 +80,8 @@ class PywinautoActivityReader:
                 "Activity selectors require evidence from the Windows spike",
                 retriable=False,
             )
-        criteria = _criteria(
-            automation_id=self.selectors.activity_automation_id,
-            title=self.selectors.activity_title,
-            control_type=self.selectors.activity_control_type,
-        )
         try:
-            container = window.native.child_window(**criteria)
-            if not container.exists(timeout=1):
-                raise SlackAdapterError(
-                    AdapterErrorCode.ACTIVITY_NOT_FOUND,
-                    "Configured Activity container was not found",
-                )
-            items = container.descendants(
-                **_criteria(
-                    automation_id=self.selectors.item_automation_id,
-                    control_type=self.selectors.item_control_type,
-                )
-            )
+            items = self._find_items(window)
         except SlackAdapterError:
             raise
         except Exception as exc:
@@ -116,6 +100,39 @@ class PywinautoActivityReader:
                     "Configured Activity item structure did not match",
                 ) from exc
         return events
+
+    def _find_items(self, window: SlackWindow) -> list[Any]:
+        activity_criteria = _criteria(
+            automation_id=self.selectors.activity_automation_id,
+            title=self.selectors.activity_title,
+            control_type=self.selectors.activity_control_type,
+        )
+        item_criteria = _criteria(
+            automation_id=self.selectors.item_automation_id,
+            control_type=self.selectors.item_control_type,
+        )
+        container = window.native.child_window(**activity_criteria)
+        if container.exists(timeout=1):
+            return list(container.descendants(**item_criteria))
+
+        prefixes = (
+            self.selectors.direct_item_automation_id_prefix,
+            self.selectors.group_item_automation_id_prefix,
+        )
+        containers = window.native.descendants(
+            control_type=self.selectors.activity_control_type or "List"
+        )
+        for candidate in containers:
+            items = list(candidate.descendants(**item_criteria))
+            if any(
+                any(_has_prefix(_automation_id(item) or "", prefix) for prefix in prefixes)
+                for item in items
+            ):
+                return items
+        raise SlackAdapterError(
+            AdapterErrorCode.ACTIVITY_NOT_FOUND,
+            "Configured Activity container was not found",
+        )
 
     def _extract(self, item: Any) -> ObservedEvent:
         item_automation_id = _automation_id(item)

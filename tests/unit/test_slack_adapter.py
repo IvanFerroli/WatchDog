@@ -114,6 +114,39 @@ def test_adapter_does_not_loop_when_activity_is_still_missing() -> None:
     assert reader.calls == 2
     assert navigator.calls == 1
 
+    with pytest.raises(SlackAdapterError):
+        adapter.observe()
+
+    assert reader.calls == 3
+    assert navigator.calls == 1
+
+
+def test_adapter_does_not_navigate_after_a_successful_scan() -> None:
+    class LaterMissingReader:
+        adapter_version = "later-missing-v1"
+
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def read(self, window: SlackWindow) -> list[object]:
+            self.calls += 1
+            if self.calls > 1:
+                raise SlackAdapterError(AdapterErrorCode.ACTIVITY_NOT_FOUND, "user left Activity")
+            return []
+
+    navigator = FakeNavigator()
+    adapter = SlackUIAdapter(
+        SlackWindowLifecycle(FakeProvider(), ("slack.exe",)),
+        LaterMissingReader(),
+        navigator,
+    )
+
+    assert adapter.observe() == []
+    with pytest.raises(SlackAdapterError):
+        adapter.observe()
+
+    assert navigator.calls == 0
+
 
 def test_adapter_wraps_unexpected_navigation_failure_and_invalidates_window() -> None:
     class BrokenNavigator:
@@ -141,6 +174,9 @@ class FakeNavigationTarget:
         self.present = exists
         self.select_error = select_error
         self.selected = False
+        self.clicked = False
+        automation_id = "activity-inbox" if exists else ""
+        self.element_info = type("ElementInfo", (), {"automation_id": automation_id})()
 
     def exists(self, timeout: float = 0) -> bool:
         return self.present
@@ -153,14 +189,19 @@ class FakeNavigationTarget:
             raise self.select_error
         self.selected = True
 
+    def click_input(self) -> None:
+        if self.select_error:
+            raise self.select_error
+        self.clicked = True
+
 
 class FakeNavigationRoot:
     def __init__(self, target: FakeNavigationTarget) -> None:
         self.target = target
 
-    def child_window(self, **criteria: str) -> FakeNavigationTarget:
-        assert criteria == {"auto_id": "activity-inbox", "control_type": "TabItem"}
-        return self.target
+    def descendants(self, **criteria: str) -> list[FakeNavigationTarget]:
+        assert criteria == {"control_type": "TabItem"}
+        return [self.target]
 
 
 def test_activity_navigator_selects_validated_activity_tab() -> None:
@@ -173,8 +214,86 @@ def test_activity_navigator_selects_validated_activity_tab() -> None:
 
     navigator.open_activity(SlackWindow(FakeNavigationRoot(target), "slack.exe"))
 
-    assert target.selected
+    assert target.clicked
     assert waits == [0.25]
+
+
+def test_activity_navigator_opens_validated_mentions_filter() -> None:
+    target = FakeNavigationTarget()
+
+    class FakeMentionsButton:
+        element_info = type("ElementInfo", (), {"name": "Menções não lidas"})()
+
+        def __init__(self) -> None:
+            self.invoked = False
+
+        def invoke(self) -> None:
+            self.invoked = True
+
+    button = FakeMentionsButton()
+
+    class RootWithMentions(FakeNavigationRoot):
+        def descendants(self, **criteria: str) -> list[object]:
+            if criteria == {"control_type": "Button"}:
+                return [button]
+            return super().descendants(**criteria)
+
+    waits: list[float] = []
+    navigator = PywinautoActivityNavigator(
+        secondary_title="Menções não lidas",
+        settle_seconds=0.25,
+        sleeper=waits.append,
+    )
+
+    navigator.open_activity(SlackWindow(RootWithMentions(target), "slack.exe"))
+
+    assert target.clicked
+    assert button.invoked
+    assert waits == [0.25, 0.25]
+
+
+def test_activity_navigator_uses_official_shortcut_once_then_selects_mentions() -> None:
+    shortcuts: list[str] = []
+    waits: list[float] = []
+
+    class MentionsTab:
+        element_info = type("ElementInfo", (), {"name": "Menções"})()
+
+        def __init__(self) -> None:
+            self.selected = False
+
+        def select(self) -> None:
+            self.selected = True
+
+    tab = MentionsTab()
+
+    class ShortcutRoot:
+        def __init__(self) -> None:
+            self.focused = False
+
+        def set_focus(self) -> None:
+            self.focused = True
+
+        def descendants(self, **criteria: str) -> list[MentionsTab]:
+            assert criteria == {"control_type": "TabItem"}
+            return [tab]
+
+    root = ShortcutRoot()
+    navigator = PywinautoActivityNavigator(
+        shortcut="^+m",
+        shortcut_sender=shortcuts.append,
+        secondary_title="Menções",
+        secondary_control_type="TabItem",
+        settle_seconds=0.25,
+        sleeper=waits.append,
+    )
+
+    navigator.open_activity(SlackWindow(root, "slack.exe"))
+
+    assert root.focused
+    assert shortcuts == ["^+m"]
+    assert tab.selected
+    assert waits == [0.25, 0.25]
 
 
 @pytest.mark.parametrize(
@@ -377,3 +496,40 @@ def test_activity_extracts_type_and_stable_key_from_real_item_prefix(
     assert events[0].external_key == automation_id
     assert events[0].raw_type == expected_type
     assert events[0].body == "Conteúdo local"
+
+
+def test_activity_discovers_localized_list_by_validated_item_prefixes() -> None:
+    item = FakeElement(
+        "Conteúdo local",
+        automation_id="at_user-C123-1784760246.639139",
+    )
+    container = FakeElement(children={"item": item})
+
+    class MissingContainer(FakeElement):
+        def exists(self, timeout: float = 0) -> bool:
+            return False
+
+    class DiscoveryRoot(FakeElement):
+        def child_window(self, **criteria: str) -> FakeElement:
+            return MissingContainer()
+
+        def descendants(self, **criteria: str) -> list[FakeElement]:
+            assert criteria == {"control_type": "List"}
+            return [container]
+
+    reader = PywinautoActivityReader(
+        ActivitySelectors(
+            activity_title="Título localizado incorreto",
+            activity_control_type="List",
+            item_control_type="ListItem",
+            direct_item_automation_id_prefix="at_user-",
+            group_item_automation_id_prefix="at_user_group-",
+            item_name_as_body=True,
+        ),
+        clock=lambda: datetime(2026, 7, 22, tzinfo=UTC),
+    )
+
+    events = reader.read(SlackWindow(DiscoveryRoot(), "slack.exe"))
+
+    assert len(events) == 1
+    assert events[0].external_key == "at_user-C123-1784760246.639139"

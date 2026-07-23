@@ -40,8 +40,10 @@ prefixo `at_user_group-`. Para esse ambiente, use:
 ./scripts/run_watchdog_windows.ps1
 ```
 
-A versão atual requer a tela `Activity > Menções` acessível. O helper pode
-navegar até ela durante o diagnóstico com `--navigate-automation-id activity-inbox`.
+A versão atual abre `Activity > Menções` uma única vez ao iniciar, usando o
+atalho oficial do Slack. A navegação não se repete durante os ciclos para não
+roubar o foco do teclado. Se você trocar de tela dentro do Slack, reabra
+`Activity > Menções` para retomar a leitura.
 
 Uma leitura diagnóstica pode ser executada assim, substituindo apenas pelos
 valores realmente comprovados no spike:
@@ -59,6 +61,12 @@ watchdog --once `
 Depois do gate aprovado, execute sem `--once` para abrir tray/painel. O menu
 permite abrir o painel, pausar/retomar e encerrar. Fechar o painel não encerra o
 monitor.
+
+No ambiente preparado, dê dois cliques em **AlwaysTrack Watchdog** na Área de
+Trabalho. Ele usa `pythonw.exe`, não mantém terminal aberto e continua na
+bandeja. O popup requer **Configurações > Sistema > Notificações** ativado no
+Windows. O MVP alerta menções diretas com `@usuário`; uma DM sem menção ainda
+fica a cargo das notificações nativas do Slack.
 
 As notificações aparecem como popups nativos de duração longa, com som, corpo
 clicável e botão **Abrir no Slack**. No perfil validado atual, o clique abre ou

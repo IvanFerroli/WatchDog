@@ -30,15 +30,25 @@ class SlackUIAdapter:
         self._lifecycle = lifecycle
         self._reader = reader
         self._navigator = navigator
+        self._navigation_attempted = False
         self.adapter_version = reader.adapter_version
 
     def observe(self) -> list[ObservedEvent]:
         window = self._lifecycle.current()
         try:
-            return self._reader.read(window)
+            events = self._reader.read(window)
+            # Never steal focus later just because the user intentionally left
+            # Activity after a successful startup scan.
+            self._navigation_attempted = True
+            return events
         except SlackAdapterError as exc:
             navigator = self._navigator
-            if exc.code is AdapterErrorCode.ACTIVITY_NOT_FOUND and navigator is not None:
+            if (
+                exc.code is AdapterErrorCode.ACTIVITY_NOT_FOUND
+                and navigator is not None
+                and not self._navigation_attempted
+            ):
+                self._navigation_attempted = True
                 return self._restore_activity_and_retry(window, navigator)
             self._handle_failure(exc)
             raise
