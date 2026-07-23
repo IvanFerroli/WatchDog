@@ -26,14 +26,18 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--once", action="store_true", help="execute one scan and exit")
     parser.add_argument("--headless", action="store_true", help="do not start tray/panel")
     parser.add_argument("--activity-automation-id")
-    parser.add_argument("--activity-title")
-    parser.add_argument("--activity-control-type")
+    parser.add_argument("--activity-title", default="Menções")
+    parser.add_argument("--activity-control-type", default="List")
     parser.add_argument("--item-automation-id")
-    parser.add_argument("--item-control-type")
+    parser.add_argument("--item-control-type", default="ListItem")
     parser.add_argument("--event-type-automation-id")
-    parser.add_argument("--direct-item-automation-id-prefix")
-    parser.add_argument("--group-item-automation-id-prefix")
-    parser.add_argument("--item-name-as-body", action="store_true")
+    parser.add_argument("--direct-item-automation-id-prefix", default="at_user-")
+    parser.add_argument("--group-item-automation-id-prefix", default="at_user_group-")
+    parser.add_argument(
+        "--item-name-as-body",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+    )
     parser.add_argument("--sender-automation-id")
     parser.add_argument("--channel-automation-id")
     parser.add_argument("--body-automation-id")

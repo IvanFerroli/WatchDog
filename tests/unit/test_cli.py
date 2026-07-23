@@ -5,7 +5,18 @@ import sys
 
 import pytest
 
-from watchdog.application.cli import main
+from watchdog.application.cli import build_parser, main
+
+
+def test_packaged_cli_defaults_to_validated_slack_activity_selectors() -> None:
+    args = build_parser().parse_args([])
+
+    assert args.activity_title == "Menções"
+    assert args.activity_control_type == "List"
+    assert args.item_control_type == "ListItem"
+    assert args.direct_item_automation_id_prefix == "at_user-"
+    assert args.group_item_automation_id_prefix == "at_user_group-"
+    assert args.item_name_as_body is True
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="validates structured non-Windows fallback")
