@@ -236,6 +236,8 @@ def test_activity_navigator_opens_validated_mentions_filter() -> None:
         def descendants(self, **criteria: str) -> list[object]:
             if criteria == {"control_type": "Button"}:
                 return [button]
+            if criteria == {"control_type": "List"}:
+                return []
             return super().descendants(**criteria)
 
     waits: list[float] = []
@@ -275,6 +277,8 @@ def test_activity_navigator_uses_official_shortcut_once_then_selects_mentions() 
             self.focused = True
 
         def descendants(self, **criteria: str) -> list[MentionsTab]:
+            if criteria == {"control_type": "List"}:
+                return []
             assert criteria == {"control_type": "TabItem"}
             return [tab]
 
@@ -294,6 +298,34 @@ def test_activity_navigator_uses_official_shortcut_once_then_selects_mentions() 
     assert shortcuts == ["^+m"]
     assert tab.selected
     assert waits == [0.25, 0.25]
+
+
+def test_activity_navigator_accepts_already_selected_mentions_content() -> None:
+    target = FakeNavigationTarget()
+    mentions = type(
+        "MentionsList",
+        (),
+        {"element_info": type("ElementInfo", (), {"name": "Menções"})()},
+    )()
+
+    class RootWithActiveMentions(FakeNavigationRoot):
+        def descendants(self, **criteria: str) -> list[object]:
+            if criteria == {"control_type": "List"}:
+                return [mentions]
+            return super().descendants(**criteria)
+
+    waits: list[float] = []
+    navigator = PywinautoActivityNavigator(
+        secondary_title="Menções",
+        secondary_control_type="TabItem",
+        settle_seconds=0.25,
+        sleeper=waits.append,
+    )
+
+    navigator.open_activity(SlackWindow(RootWithActiveMentions(target), "slack.exe"))
+
+    assert target.clicked
+    assert waits == [0.25]
 
 
 @pytest.mark.parametrize(
@@ -354,14 +386,15 @@ class FakeDesktopWindow:
 
 
 class FakeDesktop:
-    def __init__(self, windows: list[FakeDesktopWindow]) -> None:
+    def __init__(self, windows: list[FakeDesktopWindow], *, expected_handle: int = 2) -> None:
         self._windows = windows
+        self._expected_handle = expected_handle
 
     def windows(self, **_: object) -> list[FakeDesktopWindow]:
         return self._windows
 
     def window(self, *, handle: int) -> FakeNative:
-        assert handle == 2
+        assert handle == self._expected_handle
         return FakeNative()
 
 
@@ -390,6 +423,38 @@ def test_pywinauto_provider_reports_missing_desktop_window(monkeypatch) -> None:
         provider.find_window(("slack.exe",))
 
     assert error.value.code is AdapterErrorCode.SLACK_NOT_RUNNING
+
+
+def test_pywinauto_provider_discovers_handle_with_fast_win32_backend(monkeypatch) -> None:
+    discovery = FakeDesktop(
+        [
+            FakeDesktopWindow(3, visible=False, width=2000, height=1200, pid=30),
+            FakeDesktopWindow(4, visible=True, width=900, height=700, pid=40),
+        ],
+        expected_handle=4,
+    )
+    uia = FakeDesktop([], expected_handle=4)
+    requested_backends: list[str] = []
+
+    def uia_factory(*, backend: str) -> FakeDesktop:
+        requested_backends.append(backend)
+        return uia
+
+    def win32_factory(*, backend: str) -> FakeDesktop:
+        requested_backends.append(backend)
+        return discovery
+
+    monkeypatch.setattr(provider_module.sys, "platform", "win32")
+    provider = PywinautoWindowProvider(
+        desktop_factory=uia_factory,
+        win32_desktop_factory=win32_factory,
+    )
+
+    window = provider.find_window(("slack.exe",))
+
+    assert requested_backends == ["win32", "uia"]
+    assert window.process_id == 40
+    assert isinstance(window.native, FakeNative)
 
 
 def test_activity_requires_complete_spike_selectors() -> None:

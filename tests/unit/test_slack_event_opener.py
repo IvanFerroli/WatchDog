@@ -240,6 +240,36 @@ def test_direct_message_opens_unique_actor_conversation_without_typing_search() 
     assert launched == []
 
 
+def test_direct_message_opens_current_slack_list_item_structure() -> None:
+    dm_tab = FakeControl(automation_id="dms")
+    conversation = FakeControl(
+        automation_id="D0BGN0E6K3K",
+        name="JosemariOntemta me devendo 10 conto ja",
+    )
+    root = FakeRoot(
+        tabs=[dm_tab],
+        list_items=[conversation],
+        buttons=[FakeControl(name="Outra Pessoa")],
+    )
+    opener = PywinautoSlackEventOpener(
+        FakeProvider(root),
+        ("slack.exe",),
+        destination_launcher=lambda _destination: None,
+        settle_seconds=0,
+    )
+
+    result = opener.open(
+        _event(
+            source="windows.user_notification_listener.slack",
+            category=EventCategory.DIRECT_MESSAGE,
+            actor="Josemari",
+        )
+    )
+
+    assert result is SlackOpenResult.CONVERSATION
+    assert conversation.actions == ["click_input"]
+
+
 def test_ambiguous_direct_message_uses_signaled_generic_fallback() -> None:
     root = FakeRoot(
         tabs=[FakeControl(automation_id="dms")],
@@ -267,6 +297,34 @@ def test_ambiguous_direct_message_uses_signaled_generic_fallback() -> None:
     assert result is SlackOpenResult.GENERIC
     assert launched == ["slack://open"]
     assert all(not button.actions for button in root.buttons)
+
+
+def test_direct_message_does_not_confuse_slackbot_ai_with_slackbot_dm() -> None:
+    root = FakeRoot(
+        tabs=[FakeControl(automation_id="dms")],
+        buttons=[
+            FakeControl(name="Chat with Slackbot AI"),
+            FakeControl(name="Agora não, leve-me ao Slackbot básico"),
+        ],
+    )
+    launched: list[str] = []
+    opener = PywinautoSlackEventOpener(
+        FakeProvider(root),
+        ("slack.exe",),
+        destination_launcher=launched.append,
+        settle_seconds=0,
+    )
+
+    result = opener.open(
+        _event(
+            source="windows.user_notification_listener.slack",
+            category=EventCategory.DIRECT_MESSAGE,
+            actor="Slackbot",
+        )
+    )
+
+    assert result is SlackOpenResult.GENERIC
+    assert launched == ["slack://open"]
 
 
 def test_missing_dm_actor_uses_generic_fallback_without_uia_navigation() -> None:

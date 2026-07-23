@@ -82,6 +82,12 @@ class PywinautoActivityNavigator:
             ) from exc
 
     def _open_secondary(self, window: SlackWindow) -> None:
+        active_content = window.native.descendants(control_type="List")
+        if any(
+            str(getattr(control.element_info, "name", "") or "").strip() == self.secondary_title
+            for control in active_content
+        ):
+            return
         controls = window.native.descendants(control_type=self.secondary_control_type)
         candidates = [
             control

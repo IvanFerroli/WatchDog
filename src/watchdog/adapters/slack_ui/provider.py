@@ -31,9 +31,11 @@ class PywinautoWindowProvider:
         application_factory: Callable[..., Any] | None = None,
         *,
         desktop_factory: Callable[..., Any] | None = None,
+        win32_desktop_factory: Callable[..., Any] | None = None,
     ) -> None:
         self._application_factory = application_factory
         self._desktop_factory = desktop_factory
+        self._win32_desktop_factory = win32_desktop_factory
 
     def _factory(self) -> Callable[..., Any]:
         if self._application_factory is not None:
@@ -88,15 +90,20 @@ class PywinautoWindowProvider:
                 retriable=False,
             )
         try:
-            if self._desktop_factory is None:
-                from pywinauto import Desktop
+            if self._desktop_factory is None or self._win32_desktop_factory is not None:
+                if self._desktop_factory is None or self._win32_desktop_factory is None:
+                    from pywinauto import Desktop
 
-                desktop_factory = Desktop
+                uia_desktop_factory = self._desktop_factory or Desktop
+                win32_desktop_factory = self._win32_desktop_factory or Desktop
+                discovery_desktop = win32_desktop_factory(backend="win32")
             else:
-                desktop_factory = self._desktop_factory
-
-            desktop = desktop_factory(backend="uia")
-            windows = desktop.windows(title_re="(?i).*slack.*", visible_only=False)
+                uia_desktop_factory = self._desktop_factory
+                discovery_desktop = uia_desktop_factory(backend="uia")
+            windows = discovery_desktop.windows(
+                title_re="(?i).*slack.*",
+                visible_only=False,
+            )
             if not windows:
                 raise SlackAdapterError(
                     AdapterErrorCode.SLACK_NOT_RUNNING,
@@ -106,7 +113,7 @@ class PywinautoWindowProvider:
                 windows,
                 key=lambda window: (window.is_visible(), _window_area(window)),
             )
-            native = desktop.window(handle=selected.handle)
+            native = uia_desktop_factory(backend="uia").window(handle=selected.handle)
             return SlackWindow(
                 native,
                 process_names[0],

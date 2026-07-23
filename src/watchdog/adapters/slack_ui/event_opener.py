@@ -22,6 +22,28 @@ _DM_SOURCE = "windows.user_notification_listener.slack"
 _DM_TAB_AUTOMATION_ID = "dms"
 _MAX_EXTERNAL_KEY_LENGTH = 512
 _MAX_ACTOR_LENGTH = 120
+_SLACK_CARD_TIME_PREFIXES = (
+    "agora",
+    "hoje",
+    "ontem",
+    "segunda-feira",
+    "terça-feira",
+    "quarta-feira",
+    "quinta-feira",
+    "sexta-feira",
+    "sábado",
+    "domingo",
+    "now",
+    "today",
+    "yesterday",
+    "monday",
+    "tuesday",
+    "wednesday",
+    "thursday",
+    "friday",
+    "saturday",
+    "sunday",
+)
 
 
 class ActivityNavigator(Protocol):
@@ -129,15 +151,18 @@ class PywinautoSlackEventOpener:
         if self._settle_seconds:
             self._sleeper(self._settle_seconds)
 
-        matches = [
-            control
-            for control in window.native.descendants(control_type="Button")
-            if _name_contains_actor(_control_name(control), actor)
-        ]
-        if len(matches) != 1:
-            return SlackOpenResult.GENERIC
-        _activate(matches[0], methods=("click_input", "invoke", "select"))
-        return SlackOpenResult.CONVERSATION
+        for control_type in ("ListItem", "Button"):
+            matches = [
+                control
+                for control in window.native.descendants(control_type=control_type)
+                if _name_contains_actor(_control_name(control), actor)
+            ]
+            if len(matches) == 1:
+                _activate(matches[0], methods=("click_input", "invoke", "select"))
+                return SlackOpenResult.CONVERSATION
+            if matches:
+                return SlackOpenResult.GENERIC
+        return SlackOpenResult.GENERIC
 
 
 def _find_by_automation_id(
@@ -207,12 +232,20 @@ def _name_contains_actor(name: str, actor: str) -> bool:
     normalized_actor = canonical_text(actor)
     if not _usable_actor(normalized_actor):
         return False
-    return (
+    has_word_boundary = (
         re.search(
             rf"(?<!\w){re.escape(normalized_actor)}(?!\w)",
             normalized_name,
         )
         is not None
+    )
+    if has_word_boundary:
+        return True
+    if not normalized_name.startswith(normalized_actor):
+        return False
+    remainder = normalized_name[len(normalized_actor) :]
+    return bool(
+        remainder and (remainder[0].isdigit() or remainder.startswith(_SLACK_CARD_TIME_PREFIXES))
     )
 
 
