@@ -16,11 +16,11 @@ jobs:
           cache: pip
       - run: choco install innosetup --yes --no-progress
       - shell: pwsh
-        run: ./scripts/build_windows.ps1
+        run: ./scripts/build_windows.ps1 -SmokeInstaller
       - uses: actions/upload-artifact@v4
         with:
-          name: AlwaysTrackWatchdog-windows
+          name: AlwaysTrackWatchdog-Setup-Windows-x64
           path: |
-            dist/AlwaysTrackWatchdog/
             dist/installer/*.exe
+            dist/installer/SHA256SUMS.txt
           if-no-files-found: error

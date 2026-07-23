@@ -26,6 +26,17 @@ Na primeira execução, configuração, banco e logs ficam em
 `%LOCALAPPDATA%\AlwaysTrack\Watchdog`. Nenhum token, cookie ou credencial do
 Slack é solicitado.
 
+## Instalação para uso
+
+Para outro computador Windows, envie somente
+`AlwaysTrackWatchdog-<versão>-Setup.exe`. O instalador inclui o runtime e não
+depende de Python, PowerShell, WSL ou do repositório. Ele cria atalhos do
+`AlwaysTrackWatchdog.exe` com o ícone AlwaysTrack no Menu Iniciar e na Área de
+Trabalho; o autostart é opcional.
+
+Veja [Distribuição Windows](docs/operations/windows-distribution.md) para
+instalação, atualização, SHA-256 e smoke do pacote.
+
 ## Gate UIA obrigatório
 
 Os seletores devem vir do procedimento aprovado em
@@ -96,7 +107,8 @@ O build Windows reproduzível usa:
 ```
 
 Ele produz bundle PyInstaller `onedir`, instalador Inno Setup per-user e hashes
-SHA-256. O workflow `package-windows` também pode ser disparado manualmente.
+SHA-256. O build falha se não conseguir produzir o instalador transferível. O
+workflow `package-windows` também pode ser disparado manualmente.
 
 ## Operação e privacidade
 

@@ -18,12 +18,13 @@ class SingleInstanceLock:
 
     def acquire(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        handle = self.path.open("a+b")
-        handle.seek(0)
-        if handle.read(1) == b"":
-            handle.write(b"0")
-            handle.flush()
+        handle: BinaryIO | None = None
         try:
+            handle = self.path.open("a+b")
+            handle.seek(0)
+            if handle.read(1) == b"":
+                handle.write(b"0")
+                handle.flush()
             if os.name == "nt":
                 import msvcrt
 
@@ -34,7 +35,8 @@ class SingleInstanceLock:
 
                 fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
         except OSError as exc:
-            handle.close()
+            if handle is not None:
+                handle.close()
             raise AlreadyRunningError("Watchdog is already running") from exc
         self._handle = handle
 
