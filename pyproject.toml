@@ -5,13 +5,18 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "alwaystrack-watchdog"
 version = "0.1.0"
-description = "Agente local que destaca menções diretas do Slack Desktop no Windows."
+description = "Agente local que destaca menções e mensagens diretas do Slack no Windows."
 readme = "README.md"
 requires-python = ">=3.12"
 license = "LicenseRef-Proprietary"
 dependencies = [
   "pywinauto>=0.6.9; sys_platform == 'win32'",
-  "winrt-Windows.UI.Notifications.Management[all]==3.2.1; sys_platform == 'win32'",
+  "winrt-Windows.ApplicationModel==3.2.1; sys_platform == 'win32'",
+  "winrt-Windows.Data.Xml.Dom==3.2.1; sys_platform == 'win32'",
+  "winrt-Windows.Foundation==3.2.1; sys_platform == 'win32'",
+  "winrt-Windows.Foundation.Collections==3.2.1; sys_platform == 'win32'",
+  "winrt-Windows.UI.Notifications==3.2.1; sys_platform == 'win32'",
+  "winrt-Windows.UI.Notifications.Management==3.2.1; sys_platform == 'win32'",
   "winotify==1.1.0; sys_platform == 'win32'",
   "pystray>=0.19.5; sys_platform == 'win32'",
   "Pillow>=10.4; sys_platform == 'win32'",

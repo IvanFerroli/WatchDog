@@ -12,6 +12,7 @@ hiddenimports = (
     collect_submodules("pystray")
     + collect_submodules("winotify")
     + collect_submodules("winrt.windows.applicationmodel")
+    + collect_submodules("winrt.windows.data.xml.dom")
     + collect_submodules("winrt.windows.foundation")
     + collect_submodules("winrt.windows.foundation.collections")
     + collect_submodules("winrt.windows.ui.notifications")
