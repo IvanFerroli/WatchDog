@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "alwaystrack-watchdog"
-version = "0.1.0"
+version = "0.2.0"
 description = "Agente local que destaca menções e mensagens diretas do Slack no Windows."
 readme = "README.md"
 requires-python = ">=3.12"
