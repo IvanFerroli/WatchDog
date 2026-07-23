@@ -31,6 +31,9 @@ _ERROR_LABELS = {
     "ACTIVITY_NOT_FOUND": "Tela de menções não encontrada",
     "STRUCTURE_CHANGED": "A interface do Slack mudou",
     "READ_FAILED": "Não foi possível ler o Slack",
+    "SOURCE_PARTIAL_FAILURE": "Uma fonte está indisponível; as demais continuam ativas",
+    "WINDOWS_NOTIFICATIONS_ACCESS_DENIED": "Acesso às notificações do Windows foi negado",
+    "WINDOWS_NOTIFICATIONS_READ_FAILED": "Não foi possível ler as notificações do Windows",
 }
 
 _CATEGORY_LABELS = {
@@ -294,7 +297,7 @@ class TkPanel:
         self._details.set(
             f"Última leitura: {last_scan}  •  Lidos: {snapshot.items_read_last_scan}  •  "
             f"Novos: {snapshot.new_items_last_scan}  •  "
-            f"Menções diretas hoje: {snapshot.direct_mentions_today}"
+            f"Alertas enviados hoje: {snapshot.direct_mentions_today}"
         )
         error = _ERROR_LABELS.get(
             snapshot.last_error_code or "",
