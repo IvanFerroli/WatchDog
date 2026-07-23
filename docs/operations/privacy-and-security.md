@@ -13,6 +13,8 @@ ignorados em 7 dias, salvo configuração válida diferente.
 ## Logs e diagnóstico
 
 - corpo completo, credenciais e identificadores reconhecíveis não devem ir para logs;
+- a identidade `AppInfo` é validada antes de extrair o texto de um toast;
+- metadados de DM guardam apenas versão do adapter, id da notificação, AUMID e package family;
 - export UIA substitui nomes acessíveis por presença, tamanho e fingerprint;
 - screenshots e dumps brutos não pertencem ao repositório;
 - fixtures versionadas usam somente conteúdo sintético;

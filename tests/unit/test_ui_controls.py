@@ -66,16 +66,33 @@ def test_panel_view_model_persists_valid_preferences(tmp_path: Path) -> None:
     saved = view_model.save_preferences(
         poll_interval_ms=2_000,
         notification_enabled=False,
+        direct_mentions_enabled=False,
+        direct_messages_enabled=True,
         sound_enabled=False,
         start_with_windows=True,
     )
 
     assert saved.watchdog.poll_interval_ms == 2_000
     assert repository.load().notification.enabled is False
+    assert repository.load().notification.direct_mentions_enabled is False
+    assert repository.load().notification.direct_messages_enabled is True
+    assert repository.load_notification_preferences() == saved.notification
+
+    alerts = view_model.save_alert_preferences(
+        direct_mentions_enabled=True,
+        direct_messages_enabled=False,
+    )
+    assert alerts.notification.enabled is True
+    assert alerts.notification.direct_mentions_enabled is True
+    assert alerts.notification.direct_messages_enabled is False
+    assert alerts.watchdog.poll_interval_ms == 2_000
+
     with pytest.raises(ConfigError):
         view_model.save_preferences(
             poll_interval_ms=0,
             notification_enabled=True,
+            direct_mentions_enabled=True,
+            direct_messages_enabled=True,
             sound_enabled=True,
             start_with_windows=False,
         )

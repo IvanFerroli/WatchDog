@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
+from watchdog.adapters.composite import SourceFailure
 from watchdog.adapters.slack_ui import AdapterErrorCode, SlackAdapterError
 from watchdog.application import MonitorRuntime
 from watchdog.classification import EventClassifier, NotificationRules
@@ -26,6 +27,7 @@ class FakeAdapter:
     def __init__(self, events: list[ObservedEvent]) -> None:
         self.events = events
         self.error: SlackAdapterError | None = None
+        self.last_failures: tuple[SourceFailure, ...] = ()
 
     def observe(self) -> list[ObservedEvent]:
         if self.error:
@@ -132,4 +134,29 @@ def test_runtime_retries_reserved_but_unalerted_direct_event() -> None:
     assert runtime.run_once().state is HealthState.MONITORING
     assert len(notifier.events) == 2
     assert store.is_alerted(runtime.deduplication.generate_key(adapter.events[0]))
+    store.close()
+
+
+def test_runtime_processes_dm_and_reports_partial_source_failure() -> None:
+    adapter = FakeAdapter(
+        [
+            ObservedEvent(
+                "windows.user_notification_listener.slack",
+                datetime(2026, 7, 22, tzinfo=UTC),
+                external_key="windows-toast:1",
+                raw_type="MD",
+            )
+        ]
+    )
+    adapter.last_failures = (SourceFailure("slack_uia", "ACTIVITY_NOT_FOUND"),)
+    notifier = RecordingNotifier()
+    store = SQLiteEventStore(":memory:")
+    runtime = _runtime(adapter, store, notifier)
+
+    snapshot = runtime.run_once()
+
+    assert snapshot.state is HealthState.DEGRADED
+    assert snapshot.last_error_code == "SOURCE_PARTIAL_FAILURE"
+    assert snapshot.new_items_last_scan == 1
+    assert len(notifier.events) == 1
     store.close()

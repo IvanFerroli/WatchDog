@@ -25,6 +25,7 @@ python -m build
 | SQLite/migrations/retenção | integração com banco temporário | upgrade do pacote |
 | dedup/restart | unitário e integração | Slack real |
 | adapter UIA | fixtures e providers falsos | Windows/Slack obrigatório |
+| DMs via UserNotificationListener | filtro, baseline, dedup e privacidade com fakes | Windows/Slack obrigatório |
 | health/recovery | runtime com fakes | fechar/reabrir Slack |
 | notifier/tray/painel | portas e view-model | smoke Windows |
 | privacidade/diagnóstico | redaction e export sintético | revisão do artefato |

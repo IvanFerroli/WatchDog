@@ -18,6 +18,7 @@ SolidCompression=yes
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 UninstallDisplayIcon={app}\{#MyAppExeName}
+SetupIconFile=..\assets\alwaystrack.ico
 
 [Files]
 Source: "..\dist\AlwaysTrackWatchdog\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs

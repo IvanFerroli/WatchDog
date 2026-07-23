@@ -8,6 +8,10 @@ artefato. Evidências devem ser anonimizadas.
 | Cenário | Esperado | Resultado | Latência | Health | Evidência |
 |---|---|---|---|---|---|
 | menção direta | um alerta | pendente | pendente | pendente | pendente |
+| DM nova com Slack sem foco | um alerta, sem mudança de foco | pendente | pendente | pendente | pendente |
+| toast de DM existente ao iniciar | nenhum replay | pendente | n/a | pendente | pendente |
+| toast de canal/menção | nenhum alerta de DM | pendente | n/a | pendente | pendente |
+| acesso a notificações negado | erro estruturado e UIA continua | pendente | n/a | pendente | pendente |
 | menção `@sac` | nenhum alerta | pendente | n/a | pendente | pendente |
 | item permanece visível | sem repetição | pendente | n/a | pendente | pendente |
 | reinício do Watchdog | sem repetição | pendente | n/a | pendente | pendente |

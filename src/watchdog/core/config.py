@@ -74,6 +74,8 @@ class SlackConfig:
 @dataclass(frozen=True, slots=True)
 class NotificationConfig:
     enabled: bool = True
+    direct_mentions_enabled: bool = True
+    direct_messages_enabled: bool = True
     sound_enabled: bool = True
     sound_file: str | None = None
     persist_history: bool = True
@@ -191,7 +193,15 @@ class AppConfig:
         nt = _section(data, "notification")
         _reject_unknown(
             nt,
-            {"enabled", "sound_enabled", "sound_file", "persist_history", "show_preview"},
+            {
+                "enabled",
+                "direct_mentions_enabled",
+                "direct_messages_enabled",
+                "sound_enabled",
+                "sound_file",
+                "persist_history",
+                "show_preview",
+            },
             "notification",
         )
         sound_file = nt.get("sound_file", defaults.notification.sound_file)
@@ -199,6 +209,20 @@ class AppConfig:
             sound_file = _string(sound_file, "notification.sound_file")
         notification = NotificationConfig(
             enabled=_bool(nt.get("enabled", defaults.notification.enabled), "notification.enabled"),
+            direct_mentions_enabled=_bool(
+                nt.get(
+                    "direct_mentions_enabled",
+                    defaults.notification.direct_mentions_enabled,
+                ),
+                "notification.direct_mentions_enabled",
+            ),
+            direct_messages_enabled=_bool(
+                nt.get(
+                    "direct_messages_enabled",
+                    defaults.notification.direct_messages_enabled,
+                ),
+                "notification.direct_messages_enabled",
+            ),
             sound_enabled=_bool(
                 nt.get("sound_enabled", defaults.notification.sound_enabled),
                 "notification.sound_enabled",

@@ -1,7 +1,8 @@
 # AlwaysTrack Watchdog
 
-Agente local Windows que observa a Activity do Slack Desktop por UI Automation,
-alerta menções diretas e ignora menções coletivas como `@sac`.
+Agente local Windows que observa menções na Activity do Slack Desktop por UI
+Automation e mensagens diretas pelo histórico de notificações do Windows.
+Alerta eventos diretos e ignora menções coletivas como `@sac`.
 
 ## Estado do MVP
 
@@ -40,10 +41,9 @@ prefixo `at_user_group-`. Para esse ambiente, use:
 ./scripts/run_watchdog_windows.ps1
 ```
 
-A versão atual abre `Activity > Menções` uma única vez ao iniciar, usando o
-atalho oficial do Slack. A navegação não se repete durante os ciclos para não
-roubar o foco do teclado. Se você trocar de tela dentro do Slack, reabra
-`Activity > Menções` para retomar a leitura.
+A versão atual nunca troca abas nem injeta atalhos no Slack. Para ler menções,
+deixe `Activity > Menções` aberta; se você trocar de tela, reabra-a manualmente.
+Assim o monitor não rouba o foco do teclado.
 
 Uma leitura diagnóstica pode ser executada assim, substituindo apenas pelos
 valores realmente comprovados no spike:
@@ -65,15 +65,20 @@ monitor.
 No ambiente preparado, dê dois cliques em **AlwaysTrack Watchdog** na Área de
 Trabalho. Ele usa `pythonw.exe`, não mantém terminal aberto e continua na
 bandeja. O popup requer **Configurações > Sistema > Notificações** ativado no
-Windows. O MVP alerta menções diretas com `@usuário`; uma DM sem menção ainda
-fica a cargo das notificações nativas do Slack.
+Windows.
+
+Mensagens diretas são lidas sem abrir ou focar o Slack, por
+`UserNotificationListener`. O acesso a notificações do Windows precisa estar
+`Allowed`. A primeira leitura cria uma baseline e não reproduz notificações
+antigas; apenas DMs novas são alertadas. O filtro valida a identidade do Slack
+antes de ler o texto e rejeita notificações de canal, menção ou tipo ambíguo.
 
 As notificações aparecem como popups nativos de duração longa, com som, corpo
 clicável e botão **Abrir no Slack**. No perfil validado atual, o clique abre ou
 foca o cliente por `slack://open`; se um seletor de destino for comprovado e
-configurado, a mesma infraestrutura aceita abrir a conversa/mensagem. A
-recuperação UIA mantém Atividade/Menções acessível durante o monitoramento.
-Somente URIs `slack://` e URLs HTTPS sob `slack.com` são aceitas.
+configurado, a mesma infraestrutura aceita abrir a conversa/mensagem. A leitura
+UIA apenas inspeciona a tela já aberta e nunca navega pelo Slack. Somente URIs
+`slack://` e URLs HTTPS sob `slack.com` são aceitas.
 
 ## Qualidade
 

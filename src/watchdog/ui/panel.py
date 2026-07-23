@@ -106,52 +106,99 @@ class PanelViewModel:
             logs_directory=self.logs_directory,
         )
 
+    def load_preferences(self) -> AppConfig:
+        return self.config_repository.load()
+
     def save_preferences(
         self,
         *,
         poll_interval_ms: int,
         notification_enabled: bool,
+        direct_mentions_enabled: bool,
+        direct_messages_enabled: bool,
         sound_enabled: bool,
         start_with_windows: bool,
     ) -> AppConfig:
-        current = self.config_repository.load()
-        candidate = replace(
-            current,
-            watchdog=replace(
-                current.watchdog,
-                poll_interval_ms=poll_interval_ms,
-                start_with_windows=start_with_windows,
-            ),
-            notification=replace(
-                current.notification,
-                enabled=notification_enabled,
-                sound_enabled=sound_enabled,
-            ),
-        )
-        validated = AppConfig.from_dict(candidate.to_dict())
-        self.config_repository.save(validated)
-        return validated
+        def update(current: AppConfig) -> AppConfig:
+            return replace(
+                current,
+                watchdog=replace(
+                    current.watchdog,
+                    poll_interval_ms=poll_interval_ms,
+                    start_with_windows=start_with_windows,
+                ),
+                notification=replace(
+                    current.notification,
+                    enabled=notification_enabled,
+                    direct_mentions_enabled=direct_mentions_enabled,
+                    direct_messages_enabled=direct_messages_enabled,
+                    sound_enabled=sound_enabled,
+                ),
+            )
+
+        return self.config_repository.update(update)
+
+    def save_alert_preferences(
+        self,
+        *,
+        direct_mentions_enabled: bool,
+        direct_messages_enabled: bool,
+    ) -> AppConfig:
+        def update(current: AppConfig) -> AppConfig:
+            return replace(
+                current,
+                notification=replace(
+                    current.notification,
+                    enabled=direct_mentions_enabled or direct_messages_enabled,
+                    direct_mentions_enabled=direct_mentions_enabled,
+                    direct_messages_enabled=direct_messages_enabled,
+                ),
+            )
+
+        return self.config_repository.update(update)
 
 
 class TkPanel:
     """A compact tkinter status and event-history panel."""
 
-    def __init__(self, view_model: PanelViewModel) -> None:
+    def __init__(self, view_model: PanelViewModel, *, icon_path: Path | None = None) -> None:
         import tkinter as tk
         from tkinter import ttk
 
         self._tk = tk
         self._root = tk.Tk()
         self._root.title("AlwaysTrack Watchdog")
-        self._root.geometry("780x440")
-        self._root.minsize(660, 360)
+        self._root.geometry("820x530")
+        self._root.minsize(700, 460)
         self._root.protocol("WM_DELETE_WINDOW", self.hide)
         self._root.columnconfigure(0, weight=1)
         self._root.rowconfigure(0, weight=1)
         self._view_model = view_model
+        self._icon_image = None
+        if icon_path is not None and icon_path.is_file():
+            try:
+                self._icon_image = tk.PhotoImage(file=str(icon_path))
+                self._root.iconphoto(True, self._icon_image)
+            except tk.TclError:
+                self._icon_image = None
+
+        preferences = view_model.load_preferences()
         self._status = tk.StringVar()
         self._details = tk.StringVar()
         self._error = tk.StringVar()
+        self._direct_mentions_enabled = tk.BooleanVar(
+            value=(
+                preferences.notification.enabled
+                and preferences.notification.direct_mentions_enabled
+            )
+        )
+        self._direct_messages_enabled = tk.BooleanVar(
+            value=(
+                preferences.notification.enabled
+                and preferences.notification.direct_messages_enabled
+            )
+        )
+        self._preference_status = tk.StringVar()
         frame = ttk.Frame(self._root, padding=12)
         frame.grid(row=0, column=0, sticky="nsew")
         frame.columnconfigure(0, weight=1)
@@ -191,8 +238,28 @@ class TkPanel:
         scrollbar = ttk.Scrollbar(history_frame, orient="vertical", command=self._history.yview)
         scrollbar.grid(row=0, column=1, sticky="ns")
         self._history.configure(yscrollcommand=scrollbar.set)
+
+        alert_frame = ttk.LabelFrame(frame, text="Alertas popup", padding=(10, 8))
+        alert_frame.grid(row=5, column=0, pady=(10, 0), sticky="ew")
+        alert_frame.columnconfigure(2, weight=1)
+        ttk.Checkbutton(
+            alert_frame,
+            text="Menções diretas",
+            variable=self._direct_mentions_enabled,
+        ).grid(row=0, column=0, padx=(0, 16), sticky="w")
+        ttk.Checkbutton(
+            alert_frame,
+            text="Mensagens privadas (DM)",
+            variable=self._direct_messages_enabled,
+        ).grid(row=0, column=1, padx=(0, 16), sticky="w")
+        ttk.Label(alert_frame, textvariable=self._preference_status).grid(
+            row=0, column=2, padx=(0, 8), sticky="e"
+        )
+        ttk.Button(alert_frame, text="Salvar", command=self._save_alert_preferences).grid(
+            row=0, column=3, sticky="e"
+        )
         ttk.Label(frame, text=f"Logs: {view_model.logs_directory}").grid(
-            row=5, column=0, pady=(8, 0), sticky="w"
+            row=6, column=0, pady=(8, 0), sticky="w"
         )
         self.refresh()
 
@@ -207,6 +274,17 @@ class TkPanel:
 
     def shutdown(self) -> None:
         self._root.after(0, self._root.destroy)
+
+    def _save_alert_preferences(self) -> None:
+        try:
+            self._view_model.save_alert_preferences(
+                direct_mentions_enabled=self._direct_mentions_enabled.get(),
+                direct_messages_enabled=self._direct_messages_enabled.get(),
+            )
+        except (OSError, ValueError):
+            self._preference_status.set("Não foi possível salvar")
+        else:
+            self._preference_status.set("Preferências salvas")
 
     def refresh(self) -> None:
         snapshot = self._view_model.snapshot()

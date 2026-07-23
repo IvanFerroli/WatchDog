@@ -103,6 +103,7 @@ class MonitorRuntime:
             return self._adapter_failure(exc)
         except Exception:
             return self._failure(HealthState.ERROR, "UNEXPECTED_ADAPTER_ERROR")
+        source_failures = tuple(getattr(self.adapter, "last_failures", ()))
 
         new_items = 0
         direct_alerts = 0
@@ -129,13 +130,22 @@ class MonitorRuntime:
                 now,
                 error_code="EVENT_PROCESSING_FAILED",
             )
+        elif source_failures:
+            snapshot = self.health.transition(
+                HealthState.DEGRADED,
+                now,
+                error_code="SOURCE_PARTIAL_FAILURE",
+            )
         self._persist_state(snapshot)
         self._log(
             "scan.completed",
             items_read=len(observed),
             new_items=new_items,
             alerts=direct_alerts,
-            degraded=had_notification_failure,
+            degraded=had_notification_failure or bool(source_failures),
+            failed_sources=[
+                {"source": failure.source, "code": failure.code} for failure in source_failures
+            ],
         )
         return snapshot
 

@@ -9,6 +9,7 @@ from typing import Any
 from watchdog.application.configuration import JsonConfigRepository
 
 from .panel import PanelViewModel, TkPanel
+from .resources import application_icon_path
 from .tray import PystrayTray, TrayController
 
 
@@ -22,16 +23,19 @@ class DesktopApplication:
         logs_directory: Path,
     ) -> None:
         self.runtime = runtime
+        icon_path = application_icon_path()
         self.panel = TkPanel(
             PanelViewModel(
                 health=runtime.health,
                 store=store,
                 config_repository=config_repository,
                 logs_directory=logs_directory,
-            )
+            ),
+            icon_path=icon_path,
         )
         self.tray = PystrayTray(
-            TrayController(runtime, open_panel=self.panel.show, shutdown=self._shutdown)
+            TrayController(runtime, open_panel=self.panel.show, shutdown=self._shutdown),
+            icon_path=icon_path,
         )
         self._thread = threading.Thread(target=runtime.run_forever, name="watchdog-monitor")
 

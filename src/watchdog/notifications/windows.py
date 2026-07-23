@@ -9,7 +9,7 @@ from typing import Any
 from urllib.parse import urlsplit
 from xml.sax.saxutils import escape
 
-from watchdog.core.models import OperationalEvent
+from watchdog.core.models import EventCategory, OperationalEvent
 
 DEFAULT_SLACK_DESTINATION = "slack://open"
 _DESTINATION_METADATA_KEYS = ("slack_destination", "slack_activity_destination")
@@ -32,6 +32,7 @@ class WindowsNotifier:
         sound_file: str | None = None,
         preview_length: int = 160,
         show_preview: bool = True,
+        icon_path: str | Path | None = None,
         toast_factory: Callable[..., Any] | None = None,
         sound_player: Callable[[str | None], None] | None = None,
     ) -> None:
@@ -41,20 +42,21 @@ class WindowsNotifier:
         self.sound_file = sound_file
         self.preview_length = preview_length
         self.show_preview = show_preview
+        self.icon_path = _existing_absolute_path(icon_path)
         self._toast_factory = toast_factory
         self._sound_player = sound_player
 
     def notify(self, event: OperationalEvent) -> None:
-        title = "Menção direta no Slack"
-        message = (
-            _message(event, self.preview_length) if self.show_preview else "Nova menção direta"
-        )
+        title = _title(event)
+        fallback_message = _fallback_message(event)
+        message = _message(event, self.preview_length) if self.show_preview else fallback_message
         destination = _xml_attribute(notification_destination(event))
         try:
             toast = self._factory()(
                 app_id="AlwaysTrack Watchdog",
                 title=title,
                 msg=_powershell_cdata(message),
+                icon=self.icon_path,
                 duration="long",
                 launch=destination,
             )
@@ -99,10 +101,22 @@ class WindowsNotifier:
 
 def _message(event: OperationalEvent, limit: int) -> str:
     context = " · ".join(part for part in (event.actor, event.location) if part)
-    preview = (event.body or event.title or "Nova menção direta").strip()
+    preview = (event.body or event.title or _fallback_message(event)).strip()
     if len(preview) > limit:
         preview = preview[: max(1, limit - 1)].rstrip() + "…"
     return f"{context}\n{preview}" if context else preview
+
+
+def _title(event: OperationalEvent) -> str:
+    if event.category is EventCategory.DIRECT_MESSAGE:
+        return "Nova mensagem privada no Slack"
+    return "Menção direta no Slack"
+
+
+def _fallback_message(event: OperationalEvent) -> str:
+    if event.category is EventCategory.DIRECT_MESSAGE:
+        return "Nova mensagem privada"
+    return "Nova menção direta"
 
 
 def notification_destination(event: OperationalEvent) -> str:
@@ -143,3 +157,10 @@ def _powershell_cdata(value: str) -> str:
     single_line = " ".join(value.splitlines())
     xml_safe = single_line.replace("]]>", "]]]]><![CDATA[>")
     return xml_safe.replace("`", "``").replace("$", "`$")
+
+
+def _existing_absolute_path(value: str | Path | None) -> str:
+    if value is None:
+        return ""
+    path = Path(value).expanduser().resolve()
+    return str(path) if path.is_file() else ""

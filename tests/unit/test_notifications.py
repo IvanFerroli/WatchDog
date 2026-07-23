@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sys
 from datetime import UTC, datetime
+from pathlib import Path
 
 import pytest
 
@@ -29,11 +30,11 @@ class FakeToast:
         FakeToast.last_action = (label, launch)
 
 
-def _event() -> OperationalEvent:
+def _event(category: EventCategory = EventCategory.DIRECT_MENTION) -> OperationalEvent:
     return OperationalEvent(
         id="1",
         source="slack",
-        category=EventCategory.DIRECT_MENTION,
+        category=category,
         priority=EventPriority.HIGH,
         observed_at=datetime(2026, 7, 22, tzinfo=UTC),
         deduplication_key="dedup:1",
@@ -83,6 +84,30 @@ def test_preview_can_be_hidden() -> None:
         show_preview=False,
     ).notify(_event())
     assert FakeToast.last_values["msg"] == "Nova menção direta"
+
+
+def test_direct_message_uses_distinct_title_and_hidden_preview() -> None:
+    WindowsNotifier(
+        toast_factory=FakeToast,
+        sound_enabled=False,
+        show_preview=False,
+    ).notify(_event(EventCategory.DIRECT_MESSAGE))
+
+    assert FakeToast.last_values["title"] == "Nova mensagem privada no Slack"
+    assert FakeToast.last_values["msg"] == "Nova mensagem privada"
+
+
+def test_toast_uses_existing_brand_icon(tmp_path: Path) -> None:
+    icon = tmp_path / "alwaystrack.png"
+    icon.write_bytes(b"synthetic icon")
+
+    WindowsNotifier(
+        toast_factory=FakeToast,
+        sound_enabled=False,
+        icon_path=icon,
+    ).notify(_event())
+
+    assert FakeToast.last_values["icon"] == str(icon.resolve())
 
 
 def test_remote_preview_is_inert_in_winotify_powershell_and_xml() -> None:

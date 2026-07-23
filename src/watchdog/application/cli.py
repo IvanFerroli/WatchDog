@@ -77,7 +77,12 @@ def main(argv: list[str] | None = None) -> int:
         print(str(exc), file=sys.stderr)
         return 3
     try:
-        runtime, store = build_runtime(config, data_directory=data_directory, selectors=selectors)
+        runtime, store = build_runtime(
+            config,
+            data_directory=data_directory,
+            selectors=selectors,
+            notification_preferences=repository.load_notification_preferences,
+        )
         try:
             if args.once:
                 snapshot = runtime.run_once()

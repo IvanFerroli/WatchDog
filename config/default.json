@@ -14,6 +14,8 @@
   },
   "notification": {
     "enabled": true,
+    "direct_mentions_enabled": true,
+    "direct_messages_enabled": true,
     "sound_enabled": true,
     "sound_file": null,
     "persist_history": true,

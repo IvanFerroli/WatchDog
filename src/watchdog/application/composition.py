@@ -2,22 +2,24 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 
+from watchdog.adapters import CompositeEventAdapter, UserNotificationListenerSource
 from watchdog.adapters.slack_ui import (
     ActivitySelectors,
-    PywinautoActivityNavigator,
     PywinautoActivityReader,
     PywinautoWindowProvider,
     SlackUIAdapter,
     SlackWindowLifecycle,
 )
 from watchdog.classification import EventClassifier, NotificationRules
-from watchdog.core.config import AppConfig
+from watchdog.core.config import AppConfig, NotificationConfig
 from watchdog.core.deduplication import DeduplicationService
 from watchdog.core.normalizer import EventNormalizer
-from watchdog.notifications import NullNotifier, WindowsNotifier
+from watchdog.notifications import PreferenceAwareNotifier, WindowsNotifier
 from watchdog.persistence import SQLiteEventStore
+from watchdog.ui.resources import application_icon_path
 
 from .runtime import MonitorRuntime, SystemClock
 
@@ -27,6 +29,7 @@ def build_runtime(
     *,
     data_directory: Path,
     selectors: ActivitySelectors,
+    notification_preferences: Callable[[], NotificationConfig] | None = None,
 ) -> tuple[MonitorRuntime, SQLiteEventStore]:
     storage_path = (
         Path(config.storage.path).expanduser()
@@ -40,29 +43,28 @@ def build_runtime(
         preview_length=config.storage.content_preview_length,
         history_enabled=config.notification.persist_history,
     )
-    adapter = SlackUIAdapter(
+    slack_adapter = SlackUIAdapter(
         SlackWindowLifecycle(PywinautoWindowProvider(), config.slack.process_names),
         PywinautoActivityReader(
             selectors,
             direct_label=config.slack.direct_mention_labels[0],
             group_label=config.slack.group_mention_labels[0],
         ),
-        PywinautoActivityNavigator(
-            automation_id="activity-inbox",
-            secondary_title="Menções",
-            secondary_control_type="TabItem",
-            shortcut="^+m",
-        ),
     )
-    notifier = (
-        WindowsNotifier(
-            sound_enabled=config.notification.sound_enabled,
-            sound_file=config.notification.sound_file,
-            preview_length=config.storage.content_preview_length,
-            show_preview=config.notification.show_preview,
-        )
-        if config.notification.enabled
-        else NullNotifier()
+    adapter = CompositeEventAdapter(
+        slack_uia=slack_adapter,
+        slack_windows_notifications=UserNotificationListenerSource(),
+    )
+    windows_notifier = WindowsNotifier(
+        sound_enabled=config.notification.sound_enabled,
+        sound_file=config.notification.sound_file,
+        preview_length=config.storage.content_preview_length,
+        show_preview=config.notification.show_preview,
+        icon_path=application_icon_path(),
+    )
+    notifier = PreferenceAwareNotifier(
+        windows_notifier,
+        notification_preferences or (lambda: config.notification),
     )
     runtime = MonitorRuntime(
         adapter=adapter,
