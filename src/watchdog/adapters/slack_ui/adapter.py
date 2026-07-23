@@ -8,6 +8,7 @@ from watchdog.core.models import ObservedEvent
 
 from .errors import AdapterErrorCode, SlackAdapterError
 from .provider import SlackWindow, SlackWindowLifecycle
+from .synchronization import SLACK_UI_AUTOMATION_LOCK
 
 
 class ActivityReader(Protocol):
@@ -34,6 +35,10 @@ class SlackUIAdapter:
         self.adapter_version = reader.adapter_version
 
     def observe(self) -> list[ObservedEvent]:
+        with SLACK_UI_AUTOMATION_LOCK:
+            return self._observe_locked()
+
+    def _observe_locked(self) -> list[ObservedEvent]:
         window = self._lifecycle.current()
         try:
             events = self._reader.read(window)

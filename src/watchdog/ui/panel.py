@@ -9,6 +9,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, replace
 from datetime import datetime
 from pathlib import Path
+from threading import Thread
 from typing import Protocol
 
 from watchdog.adapters.slack_ui.event_opener import SlackOpenResult
@@ -226,6 +227,7 @@ class TkPanel:
         self._history_empty = tk.StringVar()
         self._history_action_status = tk.StringVar()
         self._all_history: tuple[OperationalEvent, ...] = ()
+        self._event_open_in_progress = False
         self._direct_mentions_enabled = tk.BooleanVar(
             value=(
                 preferences.notification.enabled
@@ -431,14 +433,27 @@ class TkPanel:
     def _open_selected_history_event(self, _tk_event: object | None = None) -> None:
         selection = self._history.selection()
         event = self._history_events.get(selection[0]) if selection else None
-        if event is None:
+        if event is None or self._event_open_in_progress:
             return
+        self._event_open_in_progress = True
+        self._history_action_status.set("Abrindo no Slack…")
+        _start_background(lambda: self._open_history_event(event))
+
+    def _open_history_event(self, event: OperationalEvent) -> None:
         try:
             result = self._event_opener(event)
-        except OSError:
-            self._history_action_status.set("Não foi possível abrir o Slack")
+        except Exception:
+            status = "Não foi possível abrir o Slack"
         else:
-            self._history_action_status.set(_OPEN_RESULT_LABELS.get(result, "Slack aberto"))
+            status = _OPEN_RESULT_LABELS.get(result, "Slack aberto")
+        try:
+            self._root.after(0, self._finish_history_event_open, status)
+        except (RuntimeError, self._tk.TclError):
+            return
+
+    def _finish_history_event_open(self, status: str) -> None:
+        self._event_open_in_progress = False
+        self._history_action_status.set(status)
 
     def _render_history(self, history: tuple[OperationalEvent, ...]) -> None:
         self._all_history = history
@@ -564,3 +579,11 @@ def _open_event_fallback(event: OperationalEvent) -> SlackOpenResult:
         if destination != DEFAULT_SLACK_DESTINATION
         else SlackOpenResult.GENERIC
     )
+
+
+def _start_background(callback: Callable[[], None]) -> None:
+    Thread(
+        target=callback,
+        name="watchdog-event-opener",
+        daemon=True,
+    ).start()

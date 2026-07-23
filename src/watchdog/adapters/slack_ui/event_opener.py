@@ -15,6 +15,7 @@ from watchdog.notifications.windows import DEFAULT_SLACK_DESTINATION, notificati
 
 from .errors import AdapterErrorCode, SlackAdapterError
 from .provider import SlackWindow, WindowProvider
+from .synchronization import SLACK_UI_AUTOMATION_LOCK
 
 _SLACK_UI_SOURCE = "slack.desktop.uia"
 _DM_SOURCE = "windows.user_notification_listener.slack"
@@ -59,6 +60,10 @@ class PywinautoSlackEventOpener:
         self._sleeper = sleeper
 
     def open(self, event: OperationalEvent) -> SlackOpenResult:
+        with SLACK_UI_AUTOMATION_LOCK:
+            return self._open_locked(event)
+
+    def _open_locked(self, event: OperationalEvent) -> SlackOpenResult:
         destination = notification_destination(event)
         if destination != DEFAULT_SLACK_DESTINATION:
             self._destination_launcher(destination)

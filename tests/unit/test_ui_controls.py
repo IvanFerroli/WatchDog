@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+import watchdog.ui.panel as panel_module
 from watchdog.adapters.slack_ui import SlackOpenResult
 from watchdog.application.configuration import JsonConfigRepository
 from watchdog.application.health import HealthMonitor
@@ -93,6 +94,11 @@ class FakeHistoryTree:
 
     def focus(self, item_id: str) -> None:
         self.focused = item_id
+
+
+class FakeAfterRoot:
+    def after(self, _delay: int, callback: object, *args: object) -> None:
+        callback(*args)
 
 
 def test_tray_commands_control_runtime() -> None:
@@ -271,7 +277,9 @@ def test_panel_history_type_filter_is_fail_closed_to_enabled_event_types() -> No
     assert [event.id for event in dms] == ["dm"]
 
 
-def test_panel_opens_selected_event_only_from_explicit_user_action() -> None:
+def test_panel_opens_selected_event_only_from_explicit_user_action(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     event = _event("mention", EventCategory.DIRECT_MENTION)
     opened: list[OperationalEvent] = []
     panel = object.__new__(TkPanel)
@@ -279,20 +287,29 @@ def test_panel_opens_selected_event_only_from_explicit_user_action() -> None:
     panel._history_events = {"row-1": event}
     panel._event_opener = lambda selected: opened.append(selected) or SlackOpenResult.EXACT_EVENT
     panel._history_action_status = FakeStringVar()
+    panel._event_open_in_progress = False
+    panel._root = FakeAfterRoot()
+    monkeypatch.setattr(panel_module, "_start_background", lambda callback: callback())
 
     assert opened == []
     panel._open_selected_history_event()
 
     assert opened == [event]
     assert panel._history_action_status.value == "Atividade exata aberta no Slack"
+    assert panel._event_open_in_progress is False
 
 
-def test_panel_signals_when_only_the_generic_slack_fallback_was_opened() -> None:
+def test_panel_signals_when_only_the_generic_slack_fallback_was_opened(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     panel = object.__new__(TkPanel)
     panel._history = FakeHistorySelection("row-1")
     panel._history_events = {"row-1": _event("dm", EventCategory.DIRECT_MESSAGE)}
     panel._event_opener = lambda _event: SlackOpenResult.GENERIC
     panel._history_action_status = FakeStringVar()
+    panel._event_open_in_progress = False
+    panel._root = FakeAfterRoot()
+    monkeypatch.setattr(panel_module, "_start_background", lambda callback: callback())
 
     panel._open_selected_history_event()
 
@@ -312,12 +329,17 @@ def test_panel_ignores_open_action_without_a_selected_event() -> None:
     assert opened == []
 
 
-def test_panel_reports_event_open_failure_without_crashing() -> None:
+def test_panel_reports_event_open_failure_without_crashing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     panel = object.__new__(TkPanel)
     panel._history = FakeHistorySelection("row-1")
     panel._history_events = {"row-1": _event("mention", EventCategory.DIRECT_MENTION)}
     panel._event_opener = lambda _event: (_ for _ in ()).throw(OSError("synthetic"))
     panel._history_action_status = FakeStringVar()
+    panel._event_open_in_progress = False
+    panel._root = FakeAfterRoot()
+    monkeypatch.setattr(panel_module, "_start_background", lambda callback: callback())
 
     panel._open_selected_history_event()
 
