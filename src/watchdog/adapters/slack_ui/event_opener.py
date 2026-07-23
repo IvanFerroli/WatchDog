@@ -46,22 +46,32 @@ class PywinautoSlackEventOpener:
         activity_navigator: ActivityNavigator | None = None,
         destination_launcher: Callable[[str], None] | None = None,
         settle_seconds: float = 0.25,
+        lock_timeout_seconds: float = 3.0,
         sleeper: Callable[[float], None] = sleep,
     ) -> None:
         if not process_names:
             raise ValueError("process_names must not be empty")
         if settle_seconds < 0:
             raise ValueError("settle_seconds must not be negative")
+        if lock_timeout_seconds < 0:
+            raise ValueError("lock_timeout_seconds must not be negative")
         self._provider = provider
         self._process_names = tuple(process_names)
         self._activity_navigator = activity_navigator
         self._destination_launcher = destination_launcher or _launch_destination
         self._settle_seconds = settle_seconds
+        self._lock_timeout_seconds = lock_timeout_seconds
         self._sleeper = sleeper
 
     def open(self, event: OperationalEvent) -> SlackOpenResult:
-        with SLACK_UI_AUTOMATION_LOCK:
+        acquired = SLACK_UI_AUTOMATION_LOCK.acquire(timeout=self._lock_timeout_seconds)
+        if not acquired:
+            self._destination_launcher(DEFAULT_SLACK_DESTINATION)
+            return SlackOpenResult.GENERIC
+        try:
             return self._open_locked(event)
+        finally:
+            SLACK_UI_AUTOMATION_LOCK.release()
 
     def _open_locked(self, event: OperationalEvent) -> SlackOpenResult:
         destination = notification_destination(event)

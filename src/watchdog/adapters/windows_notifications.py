@@ -16,6 +16,7 @@ from typing import Any, Protocol
 from watchdog.core.models import ObservedEvent
 
 _TOAST_GENERIC_BINDING = "ToastGeneric"
+_SLACK_CHANNEL_SLUG = re.compile(r"^\w+(?:-\w+)+$", re.UNICODE)
 
 
 class WindowsNotificationErrorCode(StrEnum):
@@ -84,9 +85,19 @@ class SlackDirectMessagePolicy:
         title = texts[0]
         return not (
             _normalized(title) == "slack"
+            or looks_like_slack_channel_title(title)
             or self._channel_markers.search(title)
             or self._non_message_markers.search(title)
         )
+
+
+def looks_like_slack_channel_title(value: str | None) -> bool:
+    """Identify an unambiguous lowercase Slack channel slug."""
+
+    if not value:
+        return False
+    title = value.strip()
+    return bool(title and title == title.casefold() and _SLACK_CHANNEL_SLUG.fullmatch(title))
 
 
 class UserNotificationListenerSource:

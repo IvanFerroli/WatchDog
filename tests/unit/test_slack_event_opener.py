@@ -3,6 +3,9 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
+import pytest
+
+import watchdog.adapters.slack_ui.event_opener as event_opener_module
 from watchdog.adapters.slack_ui import (
     PywinautoSlackEventOpener,
     SlackOpenResult,
@@ -285,6 +288,53 @@ def test_missing_dm_actor_uses_generic_fallback_without_uia_navigation() -> None
     assert result is SlackOpenResult.GENERIC
     assert launched == ["slack://open"]
     assert provider.calls == 0
+
+
+def test_lock_contention_falls_back_without_waiting_forever(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class UnavailableLock:
+        def acquire(self, *, timeout: float) -> bool:
+            assert timeout == 0.1
+            return False
+
+        def release(self) -> None:
+            raise AssertionError("an unacquired lock must not be released")
+
+    launched: list[str] = []
+    provider = FakeProvider(FakeRoot())
+    opener = PywinautoSlackEventOpener(
+        provider,
+        ("slack.exe",),
+        destination_launcher=launched.append,
+        lock_timeout_seconds=0.1,
+    )
+    monkeypatch.setattr(
+        event_opener_module,
+        "SLACK_UI_AUTOMATION_LOCK",
+        UnavailableLock(),
+    )
+
+    result = opener.open(
+        _event(
+            source="windows.user_notification_listener.slack",
+            category=EventCategory.DIRECT_MESSAGE,
+            actor="Alice",
+        )
+    )
+
+    assert result is SlackOpenResult.GENERIC
+    assert launched == ["slack://open"]
+    assert provider.calls == 0
+
+
+def test_lock_timeout_must_not_be_negative() -> None:
+    with pytest.raises(ValueError, match="lock_timeout_seconds"):
+        PywinautoSlackEventOpener(
+            FakeProvider(FakeRoot()),
+            ("slack.exe",),
+            lock_timeout_seconds=-0.1,
+        )
 
 
 def _event(

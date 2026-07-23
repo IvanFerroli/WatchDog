@@ -13,6 +13,7 @@ from threading import Thread
 from typing import Protocol
 
 from watchdog.adapters.slack_ui.event_opener import SlackOpenResult
+from watchdog.adapters.windows_notifications import looks_like_slack_channel_title
 from watchdog.application.configuration import JsonConfigRepository
 from watchdog.application.health import HealthMonitor
 from watchdog.core.config import AppConfig
@@ -65,6 +66,8 @@ _SLACK_RAW_MARKERS = tuple(
 )
 _WHITESPACE = re.compile(r"\s+")
 _HISTORY_FILTERS = ("Todos", "Menções", "DMs")
+_SLACK_DM_SOURCE = "windows.user_notification_listener.slack"
+_EVENT_OPEN_TIMEOUT_MS = 6_000
 _OPEN_RESULT_LABELS = {
     SlackOpenResult.EXACT_EVENT: "Atividade exata aberta no Slack",
     SlackOpenResult.CONVERSATION: "Conversa aberta no Slack",
@@ -116,7 +119,7 @@ class PanelViewModel:
         history = tuple(
             event
             for event in self.store.list_events(limit=history_limit)
-            if event.category in enabled_categories
+            if event.category in enabled_categories and not _is_misclassified_slack_channel(event)
         )
         slack_status = {
             "SLACK_NOT_RUNNING": "Não detectado",
@@ -228,6 +231,8 @@ class TkPanel:
         self._history_action_status = tk.StringVar()
         self._all_history: tuple[OperationalEvent, ...] = ()
         self._event_open_in_progress = False
+        self._event_open_generation = 0
+        self._event_open_timeout_id: str | None = None
         self._direct_mentions_enabled = tk.BooleanVar(
             value=(
                 preferences.notification.enabled
@@ -436,10 +441,17 @@ class TkPanel:
         if event is None or self._event_open_in_progress:
             return
         self._event_open_in_progress = True
+        self._event_open_generation = getattr(self, "_event_open_generation", 0) + 1
+        generation = self._event_open_generation
         self._history_action_status.set("Abrindo no Slack…")
-        _start_background(lambda: self._open_history_event(event))
+        self._event_open_timeout_id = self._root.after(
+            _EVENT_OPEN_TIMEOUT_MS,
+            self._expire_history_event_open,
+            generation,
+        )
+        _start_background(lambda: self._open_history_event(event, generation))
 
-    def _open_history_event(self, event: OperationalEvent) -> None:
+    def _open_history_event(self, event: OperationalEvent, generation: int) -> None:
         try:
             result = self._event_opener(event)
         except Exception:
@@ -447,13 +459,26 @@ class TkPanel:
         else:
             status = _OPEN_RESULT_LABELS.get(result, "Slack aberto")
         try:
-            self._root.after(0, self._finish_history_event_open, status)
+            self._root.after(0, self._finish_history_event_open, generation, status)
         except (RuntimeError, self._tk.TclError):
             return
 
-    def _finish_history_event_open(self, status: str) -> None:
+    def _finish_history_event_open(self, generation: int, status: str) -> None:
+        if generation != self._event_open_generation or not self._event_open_in_progress:
+            return
+        timeout_id = getattr(self, "_event_open_timeout_id", None)
+        if timeout_id is not None:
+            self._root.after_cancel(timeout_id)
+            self._event_open_timeout_id = None
         self._event_open_in_progress = False
         self._history_action_status.set(status)
+
+    def _expire_history_event_open(self, generation: int) -> None:
+        if generation != self._event_open_generation or not self._event_open_in_progress:
+            return
+        self._event_open_timeout_id = None
+        self._event_open_in_progress = False
+        self._history_action_status.set("O Slack demorou demais; tente novamente")
 
     def _render_history(self, history: tuple[OperationalEvent, ...]) -> None:
         self._all_history = history
@@ -506,6 +531,14 @@ def _history_row(event: OperationalEvent) -> tuple[str, str, str]:
     preview = _compact_preview(event.title or event.body)
     summary = " — ".join(value for value in (context, preview) if value)
     return _format_datetime(occurred_at), category, summary or "Sem resumo disponível"
+
+
+def _is_misclassified_slack_channel(event: OperationalEvent) -> bool:
+    return (
+        event.source == _SLACK_DM_SOURCE
+        and event.category is EventCategory.DIRECT_MESSAGE
+        and looks_like_slack_channel_title(event.actor)
+    )
 
 
 def _filter_history(

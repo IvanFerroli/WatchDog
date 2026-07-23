@@ -97,8 +97,27 @@ class FakeHistoryTree:
 
 
 class FakeAfterRoot:
-    def after(self, _delay: int, callback: object, *args: object) -> None:
-        callback(*args)
+    def __init__(self) -> None:
+        self.pending: dict[str, tuple[object, tuple[object, ...]]] = {}
+        self._sequence = 0
+
+    def after(self, delay: int, callback: object, *args: object) -> str:
+        self._sequence += 1
+        callback_id = f"after-{self._sequence}"
+        if delay == 0:
+            callback(*args)
+        else:
+            self.pending[callback_id] = (callback, args)
+        return callback_id
+
+    def after_cancel(self, callback_id: str) -> None:
+        self.pending.pop(callback_id, None)
+
+    def run_pending(self) -> None:
+        pending = tuple(self.pending.values())
+        self.pending.clear()
+        for callback, args in pending:
+            callback(*args)
 
 
 def test_tray_commands_control_runtime() -> None:
@@ -169,6 +188,12 @@ def test_panel_history_follows_enabled_popup_categories_immediately(tmp_path: Pa
     events = [
         _event("mention", EventCategory.DIRECT_MENTION),
         _event("dm", EventCategory.DIRECT_MESSAGE),
+        _event(
+            "false-dm",
+            EventCategory.DIRECT_MESSAGE,
+            source="windows.user_notification_listener.slack",
+            actor="solicitação-cancelamento-assinatura",
+        ),
         _event("group", EventCategory.GROUP_MENTION),
         _event("unknown", EventCategory.UNKNOWN),
     ]
@@ -346,6 +371,30 @@ def test_panel_reports_event_open_failure_without_crashing(
     assert panel._history_action_status.value == "Não foi possível abrir o Slack"
 
 
+def test_panel_stops_showing_open_progress_after_timeout(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    panel = object.__new__(TkPanel)
+    panel._history = FakeHistorySelection("row-1")
+    panel._history_events = {"row-1": _event("dm", EventCategory.DIRECT_MESSAGE)}
+    panel._event_opener = lambda _event: SlackOpenResult.CONVERSATION
+    panel._history_action_status = FakeStringVar()
+    panel._event_open_in_progress = False
+    panel._event_open_generation = 0
+    panel._event_open_timeout_id = None
+    panel._root = FakeAfterRoot()
+    monkeypatch.setattr(panel_module, "_start_background", lambda _callback: None)
+
+    panel._open_selected_history_event()
+    assert panel._event_open_in_progress is True
+    assert panel._history_action_status.value == "Abrindo no Slack…"
+
+    panel._root.run_pending()
+
+    assert panel._event_open_in_progress is False
+    assert panel._history_action_status.value == "O Slack demorou demais; tente novamente"
+
+
 def test_panel_refresh_preserves_selection_and_row_to_event_mapping() -> None:
     mention = _event(
         "mention",
@@ -395,10 +444,11 @@ def _event(
     location: str | None = None,
     title: str | None = None,
     body: str | None = None,
+    source: str = "slack",
 ) -> OperationalEvent:
     return OperationalEvent(
         id=event_id,
-        source="slack",
+        source=source,
         category=category,
         priority=EventPriority.HIGH,
         observed_at=datetime(2026, 7, 22, 18, 30, tzinfo=UTC),

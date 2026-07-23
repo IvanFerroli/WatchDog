@@ -78,6 +78,9 @@ def test_source_establishes_baseline_then_emits_each_new_dm_once() -> None:
         _record(5, "Menção no Slack", "texto"),
         _record(6, "Slack Huddle", "começou"),
         _record(7, "somente um elemento"),
+        _record(9, "alteração-dados-jet", "Mensagem direta no Slack"),
+        _record(10, "adicionados-em-sistema", "Mensagem direta no Slack"),
+        _record(11, "solicitação-cancelamento-assinatura", "Mensagem direta no Slack"),
     ],
 )
 def test_source_fails_closed_for_non_slack_or_ambiguous_toasts(
@@ -150,6 +153,11 @@ def test_slack_app_policy_requires_both_name_and_identity() -> None:
     assert policy.is_slack_app("Slack", "com.squirrel.slack.slack", "")
     assert not policy.is_slack_app("Slack", "unrelated", "unrelated")
     assert not policy.is_slack_app("Unrelated", "com.squirrel.slack.slack", "")
+
+
+@pytest.mark.parametrize("title", ["Jean-Pierre", "José da Silva", "Slackbot", "ana"])
+def test_slack_dm_policy_keeps_plausible_person_names(title: str) -> None:
+    assert SlackDirectMessagePolicy().is_slack_direct_message(_record(30, title, "Olá"))
 
 
 def _install_fake_winrt(
